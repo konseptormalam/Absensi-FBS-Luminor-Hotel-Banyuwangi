@@ -117,12 +117,14 @@
             e.preventDefault();
             loginError = '';
             
-            const nicknameInput = document.getElementById('loginNickname').value;
-            const pinInput = document.getElementById('loginPin').value;
+            // PERBAIKAN: Menambahkan .trim() untuk membuang spasi kosong tidak sengaja di input
+            const nicknameInput = document.getElementById('loginNickname').value.trim();
+            const pinInput = document.getElementById('loginPin').value.trim();
 
             const user = userList.find(u => 
-                u.nickname.toLowerCase() === nicknameInput.toLowerCase() && 
-                u.pin === pinInput
+                // PERBAIKAN: Menambahkan .trim() saat mengecek database memori
+                u.nickname.trim().toLowerCase() === nicknameInput.toLowerCase() && 
+                u.pin.trim() === pinInput
             );
 
             if (user) {
@@ -184,7 +186,9 @@
                 let inArea = false;
 
                 // 1. Dapatkan Lokasi
-                if (dashboardState.simulateInArea) {
+                // PERBAIKAN: Jika staf sedang di mode "Tugas Luar", kita mengabaikan centang simulasi
+                // dan mewajibkan penarikan lokasi GPS ASLI dari perangkat untuk mencegah kebohongan.
+                if (dashboardState.simulateInArea && !dashboardState.isOutsideClient) {
                     locationData = COMPANY_LOCATION;
                     inArea = true;
                     await new Promise(r => setTimeout(r, 500)); // Simulasi delay
@@ -193,7 +197,7 @@
                         if (!navigator.geolocation) reject('Geolokasi tidak didukung browser ini.');
                         navigator.geolocation.getCurrentPosition(
                             pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                            err => reject('Akses lokasi ditolak. Aktifkan mode simulasi.')
+                            err => reject('Akses lokasi ditolak. WAJIB aktifkan GPS perangkat Anda untuk Tugas Luar.')
                         );
                     });
                     const distance = calculateDistance(locationData.lat, locationData.lng, COMPANY_LOCATION.lat, COMPANY_LOCATION.lng);
@@ -250,16 +254,33 @@
             renderApp();
         };
 
-        window.handleUpdateLocation = () => {
-            const timeNow = getFormattedTime();
-            const randomLat = COMPANY_LOCATION.lat + (Math.random() - 0.5) * 0.05;
-            const randomLng = COMPANY_LOCATION.lng + (Math.random() - 0.5) * 0.05;
-            
-            trackingData = trackingData.filter(p => p.userId !== currentUser.id);
-            trackingData.push({ userId: currentUser.id, userName: currentUser.name, lat: randomLat, lng: randomLng, timestamp: timeNow, note: 'Lokasi diperbarui' });
-            
-            dashboardState.message = 'Lokasi live berhasil diperbarui untuk tracking.';
-            saveToLocalStorage(); // Simpan riwayat pelacakan terbaru
+        // PERBAIKAN: Mengubah sistem Update Lokasi menjadi wajib mengambil GPS nyata, bukan random number.
+        window.handleUpdateLocation = async () => {
+            dashboardState.loading = true;
+            dashboardState.message = 'Mengambil lokasi GPS asli perangkat...';
+            renderApp();
+
+            try {
+                const locationData = await new Promise((resolve, reject) => {
+                    if (!navigator.geolocation) reject('Geolokasi tidak didukung browser ini.');
+                    navigator.geolocation.getCurrentPosition(
+                        pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                        err => reject('Akses lokasi ditolak. WAJIB aktifkan GPS perangkat Anda agar valid.')
+                    );
+                });
+
+                const timeNow = getFormattedTime();
+                
+                trackingData = trackingData.filter(p => p.userId !== currentUser.id);
+                trackingData.push({ userId: currentUser.id, userName: currentUser.name, lat: locationData.lat, lng: locationData.lng, timestamp: timeNow, note: 'Lokasi asli diperbarui' });
+                
+                dashboardState.message = 'Lokasi asli berhasil diperbarui dan dikirim ke Manager.';
+                saveToLocalStorage(); // Simpan riwayat pelacakan terbaru
+            } catch (error) {
+                dashboardState.message = `Gagal Update Lokasi: ${error}`;
+            }
+
+            dashboardState.loading = false;
             renderApp();
         };
 
@@ -318,10 +339,11 @@
             e.preventDefault();
             manageStaffError = '';
 
-            const newName = document.getElementById('staffName').value;
-            const newNickname = document.getElementById('staffNickname').value;
-            const newPhone = document.getElementById('staffPhone').value;
-            const newPin = document.getElementById('staffPin').value;
+            // PERBAIKAN: Menambahkan .trim() untuk menghapus spasi awal/akhir agar database lebih bersih
+            const newName = document.getElementById('staffName').value.trim();
+            const newNickname = document.getElementById('staffNickname').value.trim();
+            const newPhone = document.getElementById('staffPhone').value.trim();
+            const newPin = document.getElementById('staffPin').value.trim();
             const newRole = document.getElementById('staffRole').value;
 
             if (!newName || !newNickname || !newPhone || !newPin) {
@@ -336,8 +358,8 @@
                 return;
             }
 
-            // Pengecekan duplikat nama panggilan (mengabaikan user yang sedang diedit)
-            const checkDuplicate = userList.find(u => u.nickname.toLowerCase() === newNickname.toLowerCase() && u.id !== editingUserId);
+            // PERBAIKAN: Menambahkan .trim() pada pengecekan duplikat
+            const checkDuplicate = userList.find(u => u.nickname.trim().toLowerCase() === newNickname.toLowerCase() && u.id !== editingUserId);
             if (checkDuplicate) {
                 manageStaffError = 'Nama Panggilan ini sudah digunakan, silakan pilih yang lain.';
                 renderApp();
@@ -699,22 +721,33 @@
                     <i data-lucide="map-pin" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
                     <p class="text-slate-500">Saat ini tidak ada staf yang sedang bertugas di luar (Tracking kosong).</p>
                 </div>`
+                // PERBAIKAN: Menambahkan peta interaktif untuk setiap staf yang dilacak agar atasan bisa mengontrol letak pastinya
                 : trackingData.map(data => `
-                <div class="flex items-start gap-4 p-4 border border-indigo-100 bg-indigo-50/50 rounded-xl">
-                    <div class="bg-indigo-100 p-3 rounded-full text-indigo-600 mt-1">
-                        <i data-lucide="map-pin" class="w-6 h-6"></i>
-                    </div>
-                    <div>
-                        <h4 class="font-bold text-slate-800 text-lg">${data.userName}</h4>
-                        <p class="text-sm text-slate-600 mb-2">Pembaruan terakhir: <span class="font-semibold">${data.timestamp}</span></p>
-                        <div class="bg-white p-3 rounded-lg border border-indigo-100 shadow-sm text-sm font-mono text-slate-700">
-                            <div>Lat: ${data.lat.toFixed(6)}</div>
-                            <div>Lng: ${data.lng.toFixed(6)}</div>
+                <div class="flex flex-col gap-4 p-4 border border-indigo-100 bg-indigo-50/50 rounded-xl">
+                    <div class="flex items-start gap-4">
+                        <div class="bg-indigo-100 p-3 rounded-full text-indigo-600 mt-1">
+                            <i data-lucide="map-pin" class="w-6 h-6"></i>
                         </div>
-                        <a href="https://www.google.com/maps/search/?api=1&query=${data.lat},${data.lng}" target="_blank" rel="noreferrer"
-                            class="inline-block mt-3 text-sm text-indigo-600 hover:text-indigo-800 font-medium underline">
-                            Lihat di Google Maps
-                        </a>
+                        <div class="flex-1">
+                            <h4 class="font-bold text-slate-800 text-lg">${data.userName}</h4>
+                            <p class="text-sm text-slate-600 mb-2">Pembaruan terakhir: <span class="font-semibold">${data.timestamp}</span></p>
+                            <div class="bg-white p-3 rounded-lg border border-indigo-100 shadow-sm text-sm font-mono text-slate-700">
+                                <div>Lat: ${data.lat.toFixed(6)}</div>
+                                <div>Lng: ${data.lng.toFixed(6)}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- PETA GOOGLE MAPS UNTUK MEMANTAU TITIK TRACKING -->
+                    <div class="w-full rounded-lg overflow-hidden border border-slate-300 shadow-inner">
+                        <iframe 
+                            width="100%" 
+                            height="200" 
+                            frameborder="0" 
+                            scrolling="no" 
+                            marginheight="0" 
+                            marginwidth="0" 
+                            src="https://maps.google.com/maps?q=${data.lat},${data.lng}&hl=id&z=17&output=embed">
+                        </iframe>
                     </div>
                 </div>`).join('');
 
@@ -723,7 +756,7 @@
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <h2 class="text-2xl font-bold text-slate-800 mb-2">Tracking Staf (Tugas Luar)</h2>
                         <p class="text-slate-500 mb-6">Pantau lokasi karyawan yang sedang melakukan pertemuan dengan klien di luar kantor.</p>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             ${trackingCards}
                         </div>
                     </div>
