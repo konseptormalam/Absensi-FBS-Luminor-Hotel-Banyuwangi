@@ -1,818 +1,749 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Clock, MapPin, Calendar, FileText, Users, LogOut, 
-  CheckCircle, PlayCircle, StopCircle, PauseCircle, Download,
-  Navigation, AlertTriangle, Shield
-} from 'lucide-react';
-
-// --- MOCK DATA & KONFIGURASI ---
-const COMPANY_LOCATION = {
-  lat: -6.175392, // Contoh: Koordinat Monas, Jakarta
-  lng: 106.827153,
-  radius: 200 // dalam meter
-};
-
-const USERS = [
-  { id: 1, name: 'Manager', nickname: 'manager', phone: '080000000001', pin: '1234', role: 'manager' },
-  { id: 2, name: 'Supervisor', nickname: 'supervisor', phone: '080000000002', pin: '1234', role: 'supervisor' },
-  { id: 3, name: 'Staf', nickname: 'staf', phone: '080000000003', pin: '1234', role: 'staff' },
-  { id: 4, name: 'Casual', nickname: 'casual', phone: '080000000004', pin: '1234', role: 'casual' },
-  { id: 5, name: 'Trainee', nickname: 'trainee', phone: '080000000005', pin: '1234', role: 'trainee' }
-];
-
-// --- FUNGSI UTILITAS ---
-// Fungsi menghitung jarak (Haversine formula) dalam meter
-const calculateDistance = (lat1, lon1, lat2, lon2) => {
-  const R = 6371e3; // Radius bumi dalam meter
-  const φ1 = lat1 * Math.PI/180; // φ, λ dalam radian
-  const φ2 = lat2 * Math.PI/180;
-  const Δφ = (lat2-lat1) * Math.PI/180;
-  const Δλ = (lon2-lon1) * Math.PI/180;
-
-  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ/2) * Math.sin(Δλ/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-  return R * c; 
-};
-
-const getFormattedTime = () => {
-  const now = new Date();
-  return now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-};
-
-const getFormattedDate = () => {
-  const now = new Date();
-  return now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-};
-
-// --- KOMPONEN UTAMA ---
-export default function App() {
-  // State Aplikasi
-  const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  
-  // State Data In-Memory
-  const [userList, setUserList] = useState(USERS);
-  const [attendanceRecords, setAttendanceRecords] = useState([]);
-  const [schedules, setSchedules] = useState([
-    { id: 1, userId: 3, date: new Date().toISOString().split('T')[0], shift: '08:00 - 17:00' },
-    { id: 2, userId: 4, date: new Date().toISOString().split('T')[0], shift: '09:00 - 18:00' }
-  ]);
-  const [trackingData, setTrackingData] = useState([]);
-
-  // State untuk form login
-  const [loginNickname, setLoginNickname] = useState('');
-  const [loginPin, setLoginPin] = useState('');
-  const [loginError, setLoginError] = useState('');
-
-  // Fungsi Login / Logout
-  const handleLoginSubmit = (e) => {
-    e.preventDefault();
-    setLoginError('');
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absensi FBS - Luminor Hotel Banyuwangi</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800">
     
-    const user = userList.find(u => 
-      u.nickname.toLowerCase() === loginNickname.toLowerCase() && 
-      u.pin === loginPin
-    );
+    <!-- Wadah Utama Aplikasi -->
+    <div id="app-root"></div>
 
-    if (user) {
-      setCurrentUser(user);
-      setActiveTab('dashboard');
-      setLoginNickname('');
-      setLoginPin('');
-    } else {
-      setLoginError('Nama panggilan atau PIN salah.');
-    }
-  };
+    <script>
+        // --- MOCK DATA & KONFIGURASI ---
+        const COMPANY_LOCATION = {
+            lat: -6.175392, // Contoh: Koordinat Monas, Jakarta
+            lng: 106.827153,
+            radius: 200 // dalam meter
+        };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-  };
+        const USERS = [
+            { id: 1, name: 'Manager', nickname: 'manager', phone: '080000000001', pin: '1234', role: 'manager' },
+            { id: 2, name: 'Supervisor', nickname: 'supervisor', phone: '080000000002', pin: '1234', role: 'supervisor' },
+            { id: 3, name: 'Staf', nickname: 'staf', phone: '080000000003', pin: '1234', role: 'staff' },
+            { id: 4, name: 'Casual', nickname: 'casual', phone: '080000000004', pin: '1234', role: 'casual' },
+            { id: 5, name: 'Trainee', nickname: 'trainee', phone: '080000000005', pin: '1234', role: 'trainee' }
+        ];
 
-  // Layar Login
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
-          <div className="text-center mb-8">
-            <div className="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Clock className="text-white w-8 h-8" />
-            </div>
-            <h1 className="text-2xl font-bold text-slate-800">Absensi FBS - Luminor Hotel Banyuwangi</h1>
-            <p className="text-slate-500 mt-2">Silakan masukkan nama panggilan dan 4 digit PIN</p>
-          </div>
+        // --- FUNGSI UTILITAS ---
+        const calculateDistance = (lat1, lon1, lat2, lon2) => {
+            const R = 6371e3; // Radius bumi dalam meter
+            const φ1 = lat1 * Math.PI/180;
+            const φ2 = lat2 * Math.PI/180;
+            const Δφ = (lat2-lat1) * Math.PI/180;
+            const Δλ = (lon2-lon1) * Math.PI/180;
 
-          {loginError && (
-            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm border border-red-200">
-              {loginError}
-            </div>
-          )}
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                        Math.cos(φ1) * Math.cos(φ2) *
+                        Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Nama Panggilan</label>
-              <input 
-                type="text" 
-                placeholder="Masukkan nama panggilan"
-                className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                value={loginNickname}
-                onChange={(e) => setLoginNickname(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">PIN (4 Angka)</label>
-              <input 
-                type="password" 
-                maxLength="4"
-                pattern="\d{4}"
-                placeholder="Contoh: 1234"
-                className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                value={loginPin}
-                onChange={(e) => setLoginPin(e.target.value)}
-                required
-              />
-            </div>
-            <button 
-              type="submit" 
-              className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold mt-2"
-            >
-              Masuk
-            </button>
-          </form>
-          
-        </div>
-      </div>
-    );
-  }
+            return R * c; 
+        };
 
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
-      {/* Sidebar Navigasi */}
-      <div className="w-full md:w-64 bg-slate-900 text-white flex flex-col">
-        <div className="p-6 text-center border-b border-slate-800">
-          <h2 className="text-xl font-bold flex items-center justify-center gap-2">
-            <Clock className="w-6 h-6 text-blue-400" />
-            Absensi FBS - Luminor Hotel Banyuwangi
-          </h2>
-          <p className="text-xs text-slate-400 mt-2">Login sebagai: {currentUser.name}</p>
-        </div>
-        <nav className="flex-1 p-4 space-y-2">
-          <NavItem icon={<Clock />} label="Dashboard / Absen" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-          {(currentUser.role === 'manager' || currentUser.role === 'supervisor') && (
-            <>
-              <NavItem icon={<FileText />} label="Laporan" active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} />
-              <NavItem icon={<Calendar />} label="Jadwal" active={activeTab === 'schedule'} onClick={() => setActiveTab('schedule')} />
-              <NavItem icon={<Navigation />} label="Tracking Staf" active={activeTab === 'tracking'} onClick={() => setActiveTab('tracking')} />
-              <NavItem icon={<Users />} label="Kelola Staf" active={activeTab === 'manage_staff'} onClick={() => setActiveTab('manage_staff')} />
-            </>
-          )}
-        </nav>
-        <div className="p-4 border-t border-slate-800">
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 text-slate-300 hover:text-white hover:bg-slate-800 p-3 rounded-lg transition-colors">
-            <LogOut className="w-5 h-5" /> Keluar
-          </button>
-        </div>
-      </div>
+        const getFormattedTime = () => {
+            const now = new Date();
+            return now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        };
 
-      {/* Konten Utama */}
-      <div className="flex-1 overflow-auto p-4 md:p-8">
-        {activeTab === 'dashboard' && (
-          <DashboardTab 
-            user={currentUser} 
-            records={attendanceRecords} 
-            setRecords={setAttendanceRecords}
-            setTracking={setTrackingData}
-          />
-        )}
-        {activeTab === 'reports' && (
-          <ReportsTab records={attendanceRecords} users={userList} />
-        )}
-        {activeTab === 'schedule' && (
-          <ScheduleTab schedules={schedules} setSchedules={setSchedules} users={userList} />
-        )}
-        {activeTab === 'tracking' && (
-          <TrackingTab trackingData={trackingData} users={userList} />
-        )}
-        {activeTab === 'manage_staff' && (
-          <ManageStaffTab users={userList} setUsers={setUserList} />
-        )}
-      </div>
-    </div>
-  );
-}
+        const getFormattedDate = () => {
+            const now = new Date();
+            return now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        };
 
-// --- KOMPONEN NAVIGASI ---
-const NavItem = ({ icon, label, active, onClick }) => (
-  <button
-    onClick={onClick}
-    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${
-      active ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-    }`}
-  >
-    {React.cloneElement(icon, { className: 'w-5 h-5' })}
-    <span className="font-medium">{label}</span>
-  </button>
-);
-
-// --- KOMPONEN KELOLA STAF (BARU & DIPERBARUI) ---
-const ManageStaffTab = ({ users, setUsers }) => {
-  const [newName, setNewName] = useState('');
-  const [newNickname, setNewNickname] = useState('');
-  const [newPhone, setNewPhone] = useState('');
-  const [newPin, setNewPin] = useState('');
-  const [newRole, setNewRole] = useState('staff');
-  const [errorMsg, setErrorMsg] = useState('');
-
-  const handleAddUser = (e) => {
-    e.preventDefault();
-    setErrorMsg('');
-
-    if (!newName || !newNickname || !newPhone || !newPin) {
-      setErrorMsg('Semua kolom wajib diisi.');
-      return;
-    }
-
-    if (newPin.length !== 4 || !/^\d+$/.test(newPin)) {
-      setErrorMsg('PIN harus terdiri dari 4 digit angka.');
-      return;
-    }
-
-    const checkDuplicate = users.find(u => u.nickname.toLowerCase() === newNickname.toLowerCase());
-    if (checkDuplicate) {
-      setErrorMsg('Nama Panggilan ini sudah digunakan, silakan pilih yang lain.');
-      return;
-    }
-    
-    const newUser = {
-      id: Date.now(), // Men-generate ID unik berdasarkan waktu
-      name: newName,
-      nickname: newNickname,
-      phone: newPhone,
-      pin: newPin,
-      role: newRole
-    };
-    
-    setUsers([...users, newUser]);
-    setNewName('');
-    setNewNickname('');
-    setNewPhone('');
-    setNewPin('');
-    setNewRole('staff');
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 mb-2">Kelola Staf Baru</h2>
-        <p className="text-slate-500 mb-6">Daftarkan akun untuk anggota tim baru. Mereka akan login menggunakan Nama Panggilan dan PIN yang Anda buatkan.</p>
-
-        {errorMsg && (
-            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm border border-red-200">
-              {errorMsg}
-            </div>
-        )}
-
-        <form onSubmit={handleAddUser} className="flex flex-col gap-4 bg-slate-50 p-6 rounded-lg border border-slate-100">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
-              <input 
-                type="text" 
-                placeholder="Contoh: Reza Rahardian"
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Nama Panggilan (Digunakan untuk Login)</label>
-              <input 
-                type="text" 
-                placeholder="Contoh: reza"
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                value={newNickname}
-                onChange={(e) => setNewNickname(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Nomor Telepon</label>
-              <input 
-                type="text" 
-                placeholder="Contoh: 08123456789"
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                value={newPhone}
-                onChange={(e) => setNewPhone(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Buat PIN (4 Digit Angka)</label>
-              <input 
-                type="text" 
-                maxLength="4"
-                pattern="\d{4}"
-                placeholder="Contoh: 1234"
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                value={newPin}
-                onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Role / Peran</label>
-              <select 
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                value={newRole}
-                onChange={(e) => setNewRole(e.target.value)}
-              >
-                <option value="staff">Staff</option>
-                <option value="casual">Casual</option>
-                <option value="trainee">Trainee</option>
-                <option value="supervisor">Supervisor</option>
-                <option value="manager">Manager</option>
-              </select>
-            </div>
-          </div>
-          <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium w-full md:w-auto self-start mt-2">
-            Daftarkan Akun
-          </button>
-        </form>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[800px]">
-            <thead>
-              <tr className="bg-slate-100 text-slate-600 text-sm border-b">
-                <th className="p-4 font-semibold">Nama Lengkap</th>
-                <th className="p-4 font-semibold">Nama Panggilan</th>
-                <th className="p-4 font-semibold">No. Telepon</th>
-                <th className="p-4 font-semibold">PIN</th>
-                <th className="p-4 font-semibold">Role</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(u => (
-                <tr key={u.id} className="border-b last:border-0 hover:bg-slate-50">
-                  <td className="p-4 font-medium text-slate-800">{u.name}</td>
-                  <td className="p-4 text-slate-600 font-medium">@{u.nickname}</td>
-                  <td className="p-4 text-slate-600">{u.phone}</td>
-                  <td className="p-4 text-slate-600 font-mono tracking-widest">{u.pin}</td>
-                  <td className="p-4">
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      u.role === 'manager' ? 'bg-purple-100 text-purple-700' :
-                      u.role === 'supervisor' ? 'bg-orange-100 text-orange-700' :
-                      u.role === 'casual' ? 'bg-pink-100 text-pink-700' :
-                      u.role === 'trainee' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
-                      {u.role.toUpperCase()}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- KOMPONEN DASHBOARD & ABSENSI ---
-const DashboardTab = ({ user, records, setRecords, setTracking }) => {
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [simulateInArea, setSimulateInArea] = useState(true); // Toggle simulasi
-  const [isOutsideClient, setIsOutsideClient] = useState(false);
-
-  const today = new Date().toISOString().split('T')[0];
-  const currentRecord = records.find(r => r.userId === user.id && r.date === today);
-
-  const handleAction = async (actionType) => {
-    setLoading(true);
-    setMessage('');
-
-    try {
-      let locationData = { lat: 0, lng: 0 };
-      let inArea = false;
-
-      // 1. Dapatkan Lokasi
-      if (simulateInArea) {
-        // Simulasi sukses berada di area kantor
-        locationData = COMPANY_LOCATION;
-        inArea = true;
-        await new Promise(r => setTimeout(r, 500)); // Simulasi delay jaringan
-      } else {
-        // Coba gunakan geolokasi browser sebenarnya (bisa gagal jika diblokir iframe)
-        locationData = await new Promise((resolve, reject) => {
-          if (!navigator.geolocation) reject('Geolokasi tidak didukung browser ini.');
-          navigator.geolocation.getCurrentPosition(
-            pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-            err => reject('Akses lokasi ditolak. Aktifkan mode simulasi.')
-          );
-        });
-        const distance = calculateDistance(locationData.lat, locationData.lng, COMPANY_LOCATION.lat, COMPANY_LOCATION.lng);
-        inArea = distance <= COMPANY_LOCATION.radius;
-      }
-
-      // 2. Validasi Clock In (Harus di area perusahaan kecuali diizinkan tugas luar)
-      if (actionType === 'clock_in' && !inArea && !isOutsideClient) {
-        setLoading(false);
-        setMessage('Gagal: Anda berada di luar area perusahaan (Radius 200m).');
-        return;
-      }
-
-      // 3. Proses Status Absensi
-      const timeNow = getFormattedTime();
-      let newRecords = [...records];
-      
-      if (actionType === 'clock_in') {
-        newRecords.push({
-          id: Date.now(),
-          userId: user.id,
-          userName: user.name,
-          date: today,
-          clockIn: timeNow,
-          clockOut: '-',
-          breakStart: '-',
-          breakEnd: '-',
-          status: isOutsideClient ? 'Tugas Luar' : 'Hadir',
-          location: locationData
-        });
+        // --- STATE APLIKASI (Pengganti useState React) ---
+        let currentUser = null;
+        let activeTab = 'dashboard';
         
-        // Mulai tracking jika tugas luar
-        if (isOutsideClient) {
-          setTracking(prev => {
-            const filtered = prev.filter(p => p.userId !== user.id);
-            return [...filtered, { userId: user.id, userName: user.name, lat: locationData.lat, lng: locationData.lng, timestamp: timeNow }];
-          });
-        }
-      } else if (currentRecord) {
-        const recordIndex = newRecords.findIndex(r => r.id === currentRecord.id);
-        if (actionType === 'break_start') newRecords[recordIndex].breakStart = timeNow;
-        if (actionType === 'break_end') newRecords[recordIndex].breakEnd = timeNow;
-        if (actionType === 'clock_out') {
-           newRecords[recordIndex].clockOut = timeNow;
-           // Hapus dari tracking live jika clock out
-           setTracking(prev => prev.filter(p => p.userId !== user.id));
-        }
-      }
+        let userList = JSON.parse(JSON.stringify(USERS)); // Deep copy array USERS awal
+        let attendanceRecords = [];
+        let schedules = [
+            { id: 1, userId: 3, date: new Date().toISOString().split('T')[0], shift: '08:00 - 17:00' },
+            { id: 2, userId: 4, date: new Date().toISOString().split('T')[0], shift: '09:00 - 18:00' }
+        ];
+        let trackingData = [];
 
-      setRecords(newRecords);
-      setMessage(`Berhasil ${actionType.replace('_', ' ').toUpperCase()}`);
+        // State untuk form login
+        let loginError = '';
 
-    } catch (error) {
-      setMessage(`Error: ${error}`);
-    }
-    
-    setLoading(false);
-  };
+        // State untuk Dashboard
+        let dashboardState = {
+            loading: false,
+            message: '',
+            simulateInArea: true,
+            isOutsideClient: false
+        };
 
-  // Tombol Update Lokasi Klien (Simulasi Tracking Berjalan)
-  const handleUpdateLocation = () => {
-    const timeNow = getFormattedTime();
-    // Simulasikan lokasi berpindah secara acak
-    const randomLat = COMPANY_LOCATION.lat + (Math.random() - 0.5) * 0.05;
-    const randomLng = COMPANY_LOCATION.lng + (Math.random() - 0.5) * 0.05;
-    
-    setTracking(prev => {
-      const filtered = prev.filter(p => p.userId !== user.id);
-      return [...filtered, { userId: user.id, userName: user.name, lat: randomLat, lng: randomLng, timestamp: timeNow, note: 'Lokasi diperbarui' }];
-    });
-    setMessage('Lokasi live berhasil diperbarui untuk tracking.');
-  };
+        // State untuk form Manage Staff
+        let manageStaffError = '';
 
-  return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h3 className="text-2xl font-bold text-slate-800">{getFormattedDate()}</h3>
-        <p className="text-slate-500">Waktu saat ini: <span className="font-mono text-blue-600 font-bold">{getFormattedTime()}</span></p>
-      </div>
+        // --- FUNGSI GLOBAL (Agar bisa dipanggil dari HTML onclick/onsubmit) ---
+        window.handleLoginSubmit = (e) => {
+            e.preventDefault();
+            loginError = '';
+            
+            const nicknameInput = document.getElementById('loginNickname').value;
+            const pinInput = document.getElementById('loginPin').value;
 
-      {message && (
-        <div className={`p-4 rounded-lg flex items-center gap-2 ${message.includes('Gagal') || message.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-          {message.includes('Gagal') ? <AlertTriangle className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
-          {message}
-        </div>
-      )}
+            const user = userList.find(u => 
+                u.nickname.toLowerCase() === nicknameInput.toLowerCase() && 
+                u.pin === pinInput
+            );
 
-      {/* Kontrol Lingkungan & Simulasi */}
-      <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl">
-        <h4 className="font-semibold text-orange-800 flex items-center gap-2 mb-3">
-          <Shield className="w-5 h-5" /> Pengaturan Mode Absensi
-        </h4>
-        <div className="flex flex-col sm:flex-row gap-4">
-          <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-            <input type="checkbox" checked={simulateInArea} onChange={(e) => setSimulateInArea(e.target.checked)} className="w-4 h-4 text-blue-600 rounded" />
-            Simulasi Berada di Area Kantor (Geofencing Pass)
-          </label>
-          <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-            <input type="checkbox" checked={isOutsideClient} onChange={(e) => setIsOutsideClient(e.target.checked)} className="w-4 h-4 text-blue-600 rounded" />
-            Mode Tugas Luar / Bertemu Klien (Bypass Geofencing & Aktifkan Tracking)
-          </label>
-        </div>
-      </div>
+            if (user) {
+                currentUser = user;
+                activeTab = 'dashboard';
+            } else {
+                loginError = 'Nama panggilan atau PIN salah.';
+            }
+            renderApp();
+        };
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Tombol-tombol Absensi */}
-        <button 
-          onClick={() => handleAction('clock_in')} 
-          disabled={loading || currentRecord}
-          className={`p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-all
-            ${currentRecord ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'}`}
-        >
-          <PlayCircle className="w-10 h-10" />
-          <span className="font-bold">CLOCK IN</span>
-        </button>
+        window.handleLogout = () => {
+            currentUser = null;
+            loginError = '';
+            renderApp();
+        };
 
-        <button 
-          onClick={() => handleAction('break_start')} 
-          disabled={loading || !currentRecord || currentRecord.breakStart !== '-' || currentRecord.clockOut !== '-'}
-          className={`p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-all
-            ${(!currentRecord || currentRecord.breakStart !== '-' || currentRecord.clockOut !== '-') ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-yellow-500 text-white hover:bg-yellow-600 shadow-md'}`}
-        >
-          <PauseCircle className="w-10 h-10" />
-          <span className="font-bold">MULAI ISTIRAHAT</span>
-        </button>
+        window.setActiveTab = (tabName) => {
+            activeTab = tabName;
+            renderApp();
+        };
 
-        <button 
-          onClick={() => handleAction('break_end')} 
-          disabled={loading || !currentRecord || currentRecord.breakStart === '-' || currentRecord.breakEnd !== '-'}
-          className={`p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-all
-            ${(!currentRecord || currentRecord.breakStart === '-' || currentRecord.breakEnd !== '-') ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600 shadow-md'}`}
-        >
-          <PlayCircle className="w-10 h-10" />
-          <span className="font-bold">SELESAI ISTIRAHAT</span>
-        </button>
+        window.toggleSimulateInArea = (checked) => {
+            dashboardState.simulateInArea = checked;
+            renderApp();
+        };
 
-        <button 
-          onClick={() => handleAction('clock_out')} 
-          disabled={loading || !currentRecord || currentRecord.clockOut !== '-'}
-          className={`p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-all
-            ${(!currentRecord || currentRecord.clockOut !== '-') ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700 shadow-md'}`}
-        >
-          <StopCircle className="w-10 h-10" />
-          <span className="font-bold">CLOCK OUT</span>
-        </button>
-      </div>
+        window.toggleIsOutsideClient = (checked) => {
+            dashboardState.isOutsideClient = checked;
+            renderApp();
+        };
 
-      {/* Tombol Ekstra untuk Tracking Klien */}
-      {currentRecord && currentRecord.status === 'Tugas Luar' && currentRecord.clockOut === '-' && (
-         <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-xl flex justify-between items-center">
-            <div>
-              <h4 className="font-semibold text-indigo-800">Mode Tugas Luar Aktif</h4>
-              <p className="text-sm text-indigo-600">Lokasi Anda sedang dipantau oleh atasan.</p>
+        window.handleDashboardAction = async (actionType) => {
+            dashboardState.loading = true;
+            dashboardState.message = '';
+            renderApp();
+
+            try {
+                let locationData = { lat: 0, lng: 0 };
+                let inArea = false;
+
+                // 1. Dapatkan Lokasi
+                if (dashboardState.simulateInArea) {
+                    locationData = COMPANY_LOCATION;
+                    inArea = true;
+                    await new Promise(r => setTimeout(r, 500)); // Simulasi delay
+                } else {
+                    locationData = await new Promise((resolve, reject) => {
+                        if (!navigator.geolocation) reject('Geolokasi tidak didukung browser ini.');
+                        navigator.geolocation.getCurrentPosition(
+                            pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                            err => reject('Akses lokasi ditolak. Aktifkan mode simulasi.')
+                        );
+                    });
+                    const distance = calculateDistance(locationData.lat, locationData.lng, COMPANY_LOCATION.lat, COMPANY_LOCATION.lng);
+                    inArea = distance <= COMPANY_LOCATION.radius;
+                }
+
+                // 2. Validasi Clock In
+                if (actionType === 'clock_in' && !inArea && !dashboardState.isOutsideClient) {
+                    dashboardState.loading = false;
+                    dashboardState.message = 'Gagal: Anda berada di luar area perusahaan (Radius 200m).';
+                    renderApp();
+                    return;
+                }
+
+                // 3. Proses Status Absensi
+                const timeNow = getFormattedTime();
+                const today = new Date().toISOString().split('T')[0];
+                const currentRecordIndex = attendanceRecords.findIndex(r => r.userId === currentUser.id && r.date === today);
+
+                if (actionType === 'clock_in') {
+                    attendanceRecords.push({
+                        id: Date.now(),
+                        userId: currentUser.id,
+                        userName: currentUser.name,
+                        date: today,
+                        clockIn: timeNow,
+                        clockOut: '-',
+                        breakStart: '-',
+                        breakEnd: '-',
+                        status: dashboardState.isOutsideClient ? 'Tugas Luar' : 'Hadir',
+                        location: locationData
+                    });
+                    
+                    if (dashboardState.isOutsideClient) {
+                        trackingData = trackingData.filter(p => p.userId !== currentUser.id);
+                        trackingData.push({ userId: currentUser.id, userName: currentUser.name, lat: locationData.lat, lng: locationData.lng, timestamp: timeNow });
+                    }
+                } else if (currentRecordIndex !== -1) {
+                    if (actionType === 'break_start') attendanceRecords[currentRecordIndex].breakStart = timeNow;
+                    if (actionType === 'break_end') attendanceRecords[currentRecordIndex].breakEnd = timeNow;
+                    if (actionType === 'clock_out') {
+                        attendanceRecords[currentRecordIndex].clockOut = timeNow;
+                        trackingData = trackingData.filter(p => p.userId !== currentUser.id);
+                    }
+                }
+
+                dashboardState.message = `Berhasil ${actionType.replace('_', ' ').toUpperCase()}`;
+            } catch (error) {
+                dashboardState.message = `Error: ${error}`;
+            }
+            
+            dashboardState.loading = false;
+            renderApp();
+        };
+
+        window.handleUpdateLocation = () => {
+            const timeNow = getFormattedTime();
+            const randomLat = COMPANY_LOCATION.lat + (Math.random() - 0.5) * 0.05;
+            const randomLng = COMPANY_LOCATION.lng + (Math.random() - 0.5) * 0.05;
+            
+            trackingData = trackingData.filter(p => p.userId !== currentUser.id);
+            trackingData.push({ userId: currentUser.id, userName: currentUser.name, lat: randomLat, lng: randomLng, timestamp: timeNow, note: 'Lokasi diperbarui' });
+            
+            dashboardState.message = 'Lokasi live berhasil diperbarui untuk tracking.';
+            renderApp();
+        };
+
+        window.exportToCSV = () => {
+            const headers = ['Nama', 'Tanggal', 'Status', 'Clock In', 'Break Start', 'Break End', 'Clock Out'];
+            const rows = attendanceRecords.map(r => [
+                r.userName, 
+                r.date, 
+                r.status, 
+                r.clockIn, 
+                r.breakStart, 
+                r.breakEnd, 
+                r.clockOut
+            ]);
+            
+            const csvContent = "data:text/csv;charset=utf-8," 
+                + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `laporan_absensi_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        window.handleAddSchedule = (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('schedUserId').value;
+            const date = document.getElementById('schedDate').value;
+            const shift = document.getElementById('schedShift').value;
+
+            if (!userId || !date || !shift) return;
+            
+            schedules.push({ id: Date.now(), userId: parseInt(userId), date, shift });
+            renderApp(); // Render ulang untuk memperbarui tabel
+        };
+
+        window.handleAddStaff = (e) => {
+            e.preventDefault();
+            manageStaffError = '';
+
+            const newName = document.getElementById('staffName').value;
+            const newNickname = document.getElementById('staffNickname').value;
+            const newPhone = document.getElementById('staffPhone').value;
+            const newPin = document.getElementById('staffPin').value;
+            const newRole = document.getElementById('staffRole').value;
+
+            if (!newName || !newNickname || !newPhone || !newPin) {
+                manageStaffError = 'Semua kolom wajib diisi.';
+                renderApp();
+                return;
+            }
+
+            if (newPin.length !== 4 || !/^\d+$/.test(newPin)) {
+                manageStaffError = 'PIN harus terdiri dari 4 digit angka.';
+                renderApp();
+                return;
+            }
+
+            const checkDuplicate = userList.find(u => u.nickname.toLowerCase() === newNickname.toLowerCase());
+            if (checkDuplicate) {
+                manageStaffError = 'Nama Panggilan ini sudah digunakan, silakan pilih yang lain.';
+                renderApp();
+                return;
+            }
+            
+            userList.push({
+                id: Date.now(),
+                name: newName,
+                nickname: newNickname,
+                phone: newPhone,
+                pin: newPin,
+                role: newRole
+            });
+            
+            renderApp();
+        };
+
+        // --- SISTEM RENDER UI (Pengganti JSX) ---
+        const renderLogin = () => `
+            <div class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+                <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
+                    <div class="text-center mb-8">
+                        <div class="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i data-lucide="clock" class="text-white w-8 h-8"></i>
+                        </div>
+                        <h1 class="text-2xl font-bold text-slate-800">Absensi FBS - Luminor Hotel Banyuwangi</h1>
+                        <p class="text-slate-500 mt-2">Silakan masukkan nama panggilan dan 4 digit PIN</p>
+                    </div>
+
+                    ${loginError ? `
+                    <div class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm border border-red-200">
+                        ${loginError}
+                    </div>` : ''}
+
+                    <form onsubmit="handleLoginSubmit(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Nama Panggilan</label>
+                            <input id="loginNickname" type="text" placeholder="Masukkan nama panggilan" required
+                                class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">PIN (4 Angka)</label>
+                            <input id="loginPin" type="password" maxlength="4" pattern="\\d{4}" placeholder="Contoh: 1234" required
+                                class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold mt-2">
+                            Masuk
+                        </button>
+                    </form>
+                </div>
             </div>
-            <button 
-              onClick={handleUpdateLocation}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 text-sm flex items-center gap-2"
-            >
-              <Navigation className="w-4 h-4" /> Update Lokasi Klien
-            </button>
-         </div>
-      )}
+        `;
 
-      {/* Status Hari Ini */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mt-8">
-        <h3 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Status Hari Ini</h3>
-        {currentRecord ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-xs text-slate-500">Clock In</p>
-              <p className="font-bold text-slate-800 text-lg">{currentRecord.clockIn}</p>
-            </div>
-            <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-xs text-slate-500">Mulai Break</p>
-              <p className="font-bold text-slate-800 text-lg">{currentRecord.breakStart}</p>
-            </div>
-            <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-xs text-slate-500">Selesai Break</p>
-              <p className="font-bold text-slate-800 text-lg">{currentRecord.breakEnd}</p>
-            </div>
-            <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-xs text-slate-500">Clock Out</p>
-              <p className="font-bold text-slate-800 text-lg">{currentRecord.clockOut}</p>
-            </div>
-          </div>
-        ) : (
-          <p className="text-slate-500 text-center py-4">Belum ada data absensi untuk hari ini.</p>
-        )}
-      </div>
-    </div>
-  );
-};
+        const renderNavButton = (icon, label, targetTab) => {
+            const isActive = activeTab === targetTab;
+            const baseClass = "w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left";
+            const activeClass = isActive ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-slate-800 hover:text-white";
+            return `
+                <button onclick="setActiveTab('${targetTab}')" class="${baseClass} ${activeClass}">
+                    <i data-lucide="${icon}" class="w-5 h-5"></i>
+                    <span class="font-medium">${label}</span>
+                </button>
+            `;
+        };
 
-// --- KOMPONEN LAPORAN ---
-const ReportsTab = ({ records }) => {
-  // Fungsi export CSV
-  const exportToCSV = () => {
-    const headers = ['Nama', 'Tanggal', 'Status', 'Clock In', 'Break Start', 'Break End', 'Clock Out'];
-    const rows = records.map(r => [
-      r.userName, 
-      r.date, 
-      r.status, 
-      r.clockIn, 
-      r.breakStart, 
-      r.breakEnd, 
-      r.clockOut
-    ]);
-    
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `laporan_absensi_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+        const renderRoleBadge = (role) => {
+            let colorClass = 'bg-green-100 text-green-700';
+            if (role === 'manager') colorClass = 'bg-purple-100 text-purple-700';
+            else if (role === 'supervisor') colorClass = 'bg-orange-100 text-orange-700';
+            else if (role === 'casual') colorClass = 'bg-pink-100 text-pink-700';
+            else if (role === 'trainee') colorClass = 'bg-yellow-100 text-yellow-700';
+            return `<span class="text-xs px-2 py-1 rounded-full ${colorClass}">${role.toUpperCase()}</span>`;
+        };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Laporan Absensi</h2>
-          <p className="text-slate-500">Rekapitulasi kehadiran seluruh staf.</p>
-        </div>
-        <button 
-          onClick={exportToCSV}
-          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-        >
-          <Download className="w-5 h-5" /> Export Excel/CSV
-        </button>
-      </div>
+        const renderDashboard = () => {
+            const today = new Date().toISOString().split('T')[0];
+            const currentRecord = attendanceRecords.find(r => r.userId === currentUser.id && r.date === today);
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-100 text-slate-600 text-sm border-b">
-                <th className="p-4 font-semibold">Nama Staf</th>
-                <th className="p-4 font-semibold">Tanggal</th>
-                <th className="p-4 font-semibold">Status</th>
-                <th className="p-4 font-semibold">Clock In</th>
-                <th className="p-4 font-semibold">Mulai Break</th>
-                <th className="p-4 font-semibold">Selesai Break</th>
-                <th className="p-4 font-semibold">Clock Out</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.length === 0 ? (
-                <tr><td colSpan="7" className="p-6 text-center text-slate-500">Data laporan masih kosong.</td></tr>
-              ) : (
-                records.map(record => (
-                  <tr key={record.id} className="border-b last:border-0 hover:bg-slate-50">
-                    <td className="p-4 font-medium text-slate-800">{record.userName}</td>
-                    <td className="p-4 text-slate-600">{record.date}</td>
-                    <td className="p-4">
-                      <span className={`text-xs px-2 py-1 rounded-full ${record.status === 'Hadir' ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                        {record.status}
-                      </span>
-                    </td>
-                    <td className="p-4 text-slate-600">{record.clockIn}</td>
-                    <td className="p-4 text-slate-600">{record.breakStart}</td>
-                    <td className="p-4 text-slate-600">{record.breakEnd}</td>
-                    <td className="p-4 text-slate-600">{record.clockOut}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
+            // Cek status tombol absensi
+            const isClockInDisabled = dashboardState.loading || currentRecord;
+            const isBreakStartDisabled = dashboardState.loading || !currentRecord || currentRecord.breakStart !== '-' || currentRecord.clockOut !== '-';
+            const isBreakEndDisabled = dashboardState.loading || !currentRecord || currentRecord.breakStart === '-' || currentRecord.breakEnd !== '-';
+            const isClockOutDisabled = dashboardState.loading || !currentRecord || currentRecord.clockOut !== '-';
 
-// --- KOMPONEN JADWAL ---
-const ScheduleTab = ({ schedules, setSchedules, users }) => {
-  const [newSchedule, setNewSchedule] = useState({ userId: '', date: '', shift: '' });
+            return `
+                <div class="space-y-6 max-w-4xl mx-auto">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="text-2xl font-bold text-slate-800">${getFormattedDate()}</h3>
+                        <p class="text-slate-500">Waktu saat ini: <span class="font-mono text-blue-600 font-bold">${getFormattedTime()}</span></p>
+                    </div>
 
-  const handleAddSchedule = (e) => {
-    e.preventDefault();
-    if (!newSchedule.userId || !newSchedule.date || !newSchedule.shift) return;
-    
-    setSchedules([...schedules, { id: Date.now(), ...newSchedule, userId: parseInt(newSchedule.userId) }]);
-    setNewSchedule({ userId: '', date: '', shift: '' });
-  };
+                    ${dashboardState.message ? `
+                        <div class="p-4 rounded-lg flex items-center gap-2 ${dashboardState.message.includes('Gagal') || dashboardState.message.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}">
+                            <i data-lucide="${dashboardState.message.includes('Gagal') ? 'alert-triangle' : 'check-circle'}" class="w-5 h-5"></i>
+                            ${dashboardState.message}
+                        </div>
+                    ` : ''}
 
-  // Trainee dan Casual sekarang juga masuk dalam filter daftar staf agar bisa diatur jadwalnya
-  const staffUsers = users.filter(u => u.role === 'staff' || u.role === 'supervisor' || u.role === 'trainee' || u.role === 'casual');
+                    <div class="bg-orange-50 border border-orange-200 p-4 rounded-xl">
+                        <h4 class="font-semibold text-orange-800 flex items-center gap-2 mb-3">
+                            <i data-lucide="shield" class="w-5 h-5"></i> Pengaturan Mode Absensi
+                        </h4>
+                        <div class="flex flex-col sm:flex-row gap-4">
+                            <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                                <input type="checkbox" ${dashboardState.simulateInArea ? 'checked' : ''} onchange="toggleSimulateInArea(this.checked)" class="w-4 h-4 text-blue-600 rounded" />
+                                Simulasi Berada di Area Kantor (Geofencing Pass)
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                                <input type="checkbox" ${dashboardState.isOutsideClient ? 'checked' : ''} onchange="toggleIsOutsideClient(this.checked)" class="w-4 h-4 text-blue-600 rounded" />
+                                Mode Tugas Luar / Bertemu Klien (Bypass Geofencing & Aktifkan Tracking)
+                            </label>
+                        </div>
+                    </div>
 
-  return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 mb-2">Manajemen Jadwal</h2>
-        <p className="text-slate-500 mb-6">Atur jadwal kerja atau shift karyawan.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <button onclick="handleDashboardAction('clock_in')" ${isClockInDisabled ? 'disabled' : ''}
+                            class="p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-all ${isClockInDisabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'}">
+                            <i data-lucide="play-circle" class="w-10 h-10"></i>
+                            <span class="font-bold">CLOCK IN</span>
+                        </button>
+                        <button onclick="handleDashboardAction('break_start')" ${isBreakStartDisabled ? 'disabled' : ''}
+                            class="p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-all ${isBreakStartDisabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-yellow-500 text-white hover:bg-yellow-600 shadow-md'}">
+                            <i data-lucide="pause-circle" class="w-10 h-10"></i>
+                            <span class="font-bold">MULAI ISTIRAHAT</span>
+                        </button>
+                        <button onclick="handleDashboardAction('break_end')" ${isBreakEndDisabled ? 'disabled' : ''}
+                            class="p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-all ${isBreakEndDisabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600 shadow-md'}">
+                            <i data-lucide="play-circle" class="w-10 h-10"></i>
+                            <span class="font-bold">SELESAI ISTIRAHAT</span>
+                        </button>
+                        <button onclick="handleDashboardAction('clock_out')" ${isClockOutDisabled ? 'disabled' : ''}
+                            class="p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-all ${isClockOutDisabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700 shadow-md'}">
+                            <i data-lucide="stop-circle" class="w-10 h-10"></i>
+                            <span class="font-bold">CLOCK OUT</span>
+                        </button>
+                    </div>
 
-        <form onSubmit={handleAddSchedule} className="flex flex-wrap gap-4 items-end bg-slate-50 p-4 rounded-lg border border-slate-100">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-slate-700 mb-1">Karyawan</label>
-            <select 
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={newSchedule.userId}
-              onChange={(e) => setNewSchedule({...newSchedule, userId: e.target.value})}
-            >
-              <option value="">-- Pilih Karyawan --</option>
-              {staffUsers.map(u => <option key={u.id} value={u.id}>{u.name} (@{u.nickname})</option>)}
-            </select>
-          </div>
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-slate-700 mb-1">Tanggal</label>
-            <input 
-              type="date" 
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={newSchedule.date}
-              onChange={(e) => setNewSchedule({...newSchedule, date: e.target.value})}
-            />
-          </div>
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-slate-700 mb-1">Jam Shift</label>
-            <input 
-              type="text" 
-              placeholder="Contoh: 08:00 - 17:00"
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={newSchedule.shift}
-              onChange={(e) => setNewSchedule({...newSchedule, shift: e.target.value})}
-            />
-          </div>
-          <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium h-[42px]">
-            Tambah Jadwal
-          </button>
-        </form>
-      </div>
+                    ${(currentRecord && currentRecord.status === 'Tugas Luar' && currentRecord.clockOut === '-') ? `
+                        <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl flex justify-between items-center">
+                            <div>
+                                <h4 class="font-semibold text-indigo-800">Mode Tugas Luar Aktif</h4>
+                                <p class="text-sm text-indigo-600">Lokasi Anda sedang dipantau oleh atasan.</p>
+                            </div>
+                            <button onclick="handleUpdateLocation()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 text-sm flex items-center gap-2">
+                                <i data-lucide="navigation" class="w-4 h-4"></i> Update Lokasi Klien
+                            </button>
+                        </div>
+                    ` : ''}
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-100 text-slate-600 text-sm border-b">
-              <th className="p-4 font-semibold">Nama Karyawan</th>
-              <th className="p-4 font-semibold">Tanggal</th>
-              <th className="p-4 font-semibold">Jam Shift</th>
-            </tr>
-          </thead>
-          <tbody>
-            {schedules.map(sched => {
-              const u = users.find(x => x.id === sched.userId);
-              return (
-                <tr key={sched.id} className="border-b last:border-0 hover:bg-slate-50">
-                  <td className="p-4 font-medium text-slate-800">{u ? u.name : 'Unknown'}</td>
-                  <td className="p-4 text-slate-600">{sched.date}</td>
-                  <td className="p-4 text-slate-600">{sched.shift}</td>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mt-8">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Status Hari Ini</h3>
+                        ${currentRecord ? `
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                                <div class="p-3 bg-slate-50 rounded-lg">
+                                    <p class="text-xs text-slate-500">Clock In</p>
+                                    <p class="font-bold text-slate-800 text-lg">${currentRecord.clockIn}</p>
+                                </div>
+                                <div class="p-3 bg-slate-50 rounded-lg">
+                                    <p class="text-xs text-slate-500">Mulai Break</p>
+                                    <p class="font-bold text-slate-800 text-lg">${currentRecord.breakStart}</p>
+                                </div>
+                                <div class="p-3 bg-slate-50 rounded-lg">
+                                    <p class="text-xs text-slate-500">Selesai Break</p>
+                                    <p class="font-bold text-slate-800 text-lg">${currentRecord.breakEnd}</p>
+                                </div>
+                                <div class="p-3 bg-slate-50 rounded-lg">
+                                    <p class="text-xs text-slate-500">Clock Out</p>
+                                    <p class="font-bold text-slate-800 text-lg">${currentRecord.clockOut}</p>
+                                </div>
+                            </div>
+                        ` : `
+                            <p class="text-slate-500 text-center py-4">Belum ada data absensi untuk hari ini.</p>
+                        `}
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderReports = () => {
+            let tableRows = attendanceRecords.length === 0 
+                ? `<tr><td colspan="7" class="p-6 text-center text-slate-500">Data laporan masih kosong.</td></tr>`
+                : attendanceRecords.map(record => `
+                    <tr class="border-b last:border-0 hover:bg-slate-50">
+                        <td class="p-4 font-medium text-slate-800">${record.userName}</td>
+                        <td class="p-4 text-slate-600">${record.date}</td>
+                        <td class="p-4">
+                            <span class="text-xs px-2 py-1 rounded-full ${record.status === 'Hadir' ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700'}">
+                                ${record.status}
+                            </span>
+                        </td>
+                        <td class="p-4 text-slate-600">${record.clockIn}</td>
+                        <td class="p-4 text-slate-600">${record.breakStart}</td>
+                        <td class="p-4 text-slate-600">${record.breakEnd}</td>
+                        <td class="p-4 text-slate-600">${record.clockOut}</td>
+                    </tr>
+                `).join('');
+
+            return `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-800">Laporan Absensi</h2>
+                            <p class="text-slate-500">Rekapitulasi kehadiran seluruh staf.</p>
+                        </div>
+                        <button onclick="exportToCSV()" class="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors shadow-sm">
+                            <i data-lucide="download" class="w-5 h-5"></i> Export Excel/CSV
+                        </button>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-100 text-slate-600 text-sm border-b">
+                                        <th class="p-4 font-semibold">Nama Staf</th>
+                                        <th class="p-4 font-semibold">Tanggal</th>
+                                        <th class="p-4 font-semibold">Status</th>
+                                        <th class="p-4 font-semibold">Clock In</th>
+                                        <th class="p-4 font-semibold">Mulai Break</th>
+                                        <th class="p-4 font-semibold">Selesai Break</th>
+                                        <th class="p-4 font-semibold">Clock Out</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${tableRows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderSchedule = () => {
+            const staffUsers = userList.filter(u => u.role === 'staff' || u.role === 'supervisor' || u.role === 'trainee' || u.role === 'casual');
+            const userOptions = staffUsers.map(u => `<option value="${u.id}">${u.name} (@${u.nickname})</option>`).join('');
+
+            const tableRows = schedules.map(sched => {
+                const u = userList.find(x => x.id === sched.userId);
+                return `
+                    <tr class="border-b last:border-0 hover:bg-slate-50">
+                        <td class="p-4 font-medium text-slate-800">${u ? u.name : 'Unknown'}</td>
+                        <td class="p-4 text-slate-600">${sched.date}</td>
+                        <td class="p-4 text-slate-600">${sched.shift}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            return `
+                <div class="space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h2 class="text-2xl font-bold text-slate-800 mb-2">Manajemen Jadwal</h2>
+                        <p class="text-slate-500 mb-6">Atur jadwal kerja atau shift karyawan.</p>
+
+                        <form onsubmit="handleAddSchedule(event)" class="flex flex-wrap gap-4 items-end bg-slate-50 p-4 rounded-lg border border-slate-100">
+                            <div class="flex-1 min-w-[200px]">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Karyawan</label>
+                                <select id="schedUserId" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <option value="">-- Pilih Karyawan --</option>
+                                    ${userOptions}
+                                </select>
+                            </div>
+                            <div class="flex-1 min-w-[200px]">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Tanggal</label>
+                                <input id="schedDate" type="date" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div class="flex-1 min-w-[200px]">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Jam Shift</label>
+                                <input id="schedShift" type="text" placeholder="Contoh: 08:00 - 17:00" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium h-[42px]">
+                                Tambah Jadwal
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-600 text-sm border-b">
+                                    <th class="p-4 font-semibold">Nama Karyawan</th>
+                                    <th class="p-4 font-semibold">Tanggal</th>
+                                    <th class="p-4 font-semibold">Jam Shift</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tableRows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderTracking = () => {
+            const trackingCards = trackingData.length === 0 
+                ? `
+                <div class="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300 col-span-1 md:col-span-2">
+                    <i data-lucide="map-pin" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
+                    <p class="text-slate-500">Saat ini tidak ada staf yang sedang bertugas di luar (Tracking kosong).</p>
+                </div>`
+                : trackingData.map(data => `
+                <div class="flex items-start gap-4 p-4 border border-indigo-100 bg-indigo-50/50 rounded-xl">
+                    <div class="bg-indigo-100 p-3 rounded-full text-indigo-600 mt-1">
+                        <i data-lucide="map-pin" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-slate-800 text-lg">${data.userName}</h4>
+                        <p class="text-sm text-slate-600 mb-2">Pembaruan terakhir: <span class="font-semibold">${data.timestamp}</span></p>
+                        <div class="bg-white p-3 rounded-lg border border-indigo-100 shadow-sm text-sm font-mono text-slate-700">
+                            <div>Lat: ${data.lat.toFixed(6)}</div>
+                            <div>Lng: ${data.lng.toFixed(6)}</div>
+                        </div>
+                        <a href="https://www.google.com/maps/search/?api=1&query=${data.lat},${data.lng}" target="_blank" rel="noreferrer"
+                            class="inline-block mt-3 text-sm text-indigo-600 hover:text-indigo-800 font-medium underline">
+                            Lihat di Google Maps
+                        </a>
+                    </div>
+                </div>`).join('');
+
+            return `
+                <div class="space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h2 class="text-2xl font-bold text-slate-800 mb-2">Tracking Staf (Tugas Luar)</h2>
+                        <p class="text-slate-500 mb-6">Pantau lokasi karyawan yang sedang melakukan pertemuan dengan klien di luar kantor.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${trackingCards}
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderManageStaff = () => {
+            const tableRows = userList.map(u => `
+                <tr class="border-b last:border-0 hover:bg-slate-50">
+                    <td class="p-4 font-medium text-slate-800">${u.name}</td>
+                    <td class="p-4 text-slate-600 font-medium">@${u.nickname}</td>
+                    <td class="p-4 text-slate-600">${u.phone}</td>
+                    <td class="p-4 text-slate-600 font-mono tracking-widest">${u.pin}</td>
+                    <td class="p-4">${renderRoleBadge(u.role)}</td>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
+            `).join('');
 
-// --- KOMPONEN TRACKING LOKASI ---
-const TrackingTab = ({ trackingData }) => {
-  return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 mb-2">Tracking Staf (Tugas Luar)</h2>
-        <p className="text-slate-500 mb-6">Pantau lokasi karyawan yang sedang melakukan pertemuan dengan klien di luar kantor.</p>
+            return `
+                <div class="space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h2 class="text-2xl font-bold text-slate-800 mb-2">Kelola Staf Baru</h2>
+                        <p class="text-slate-500 mb-6">Daftarkan akun untuk anggota tim baru. Mereka akan login menggunakan Nama Panggilan dan PIN yang Anda buatkan.</p>
 
-        {trackingData.length === 0 ? (
-          <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-            <MapPin className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500">Saat ini tidak ada staf yang sedang bertugas di luar (Tracking kosong).</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {trackingData.map((data, index) => (
-              <div key={index} className="flex items-start gap-4 p-4 border border-indigo-100 bg-indigo-50/50 rounded-xl">
-                <div className="bg-indigo-100 p-3 rounded-full text-indigo-600 mt-1">
-                  <MapPin className="w-6 h-6" />
+                        ${manageStaffError ? `
+                            <div class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm border border-red-200">
+                                ${manageStaffError}
+                            </div>
+                        ` : ''}
+
+                        <form onsubmit="handleAddStaff(event)" class="flex flex-col gap-4 bg-slate-50 p-6 rounded-lg border border-slate-100">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
+                                    <input id="staffName" type="text" placeholder="Contoh: Reza Rahardian" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Nama Panggilan (Digunakan untuk Login)</label>
+                                    <input id="staffNickname" type="text" placeholder="Contoh: reza" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Nomor Telepon</label>
+                                    <input id="staffPhone" type="text" placeholder="Contoh: 08123456789" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Buat PIN (4 Digit Angka)</label>
+                                    <input id="staffPin" type="text" maxlength="4" pattern="\\d{4}" placeholder="Contoh: 1234" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" oninput="this.value = this.value.replace(/\\D/g, '')" />
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Role / Peran</label>
+                                    <select id="staffRole" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                                        <option value="staff">Staff</option>
+                                        <option value="casual">Casual</option>
+                                        <option value="trainee">Trainee</option>
+                                        <option value="supervisor">Supervisor</option>
+                                        <option value="manager">Manager</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium w-full md:w-auto self-start mt-2">
+                                Daftarkan Akun
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse min-w-[800px]">
+                                <thead>
+                                    <tr class="bg-slate-100 text-slate-600 text-sm border-b">
+                                        <th class="p-4 font-semibold">Nama Lengkap</th>
+                                        <th class="p-4 font-semibold">Nama Panggilan</th>
+                                        <th class="p-4 font-semibold">No. Telepon</th>
+                                        <th class="p-4 font-semibold">PIN</th>
+                                        <th class="p-4 font-semibold">Role</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${tableRows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-                <div>
-                  <h4 className="font-bold text-slate-800 text-lg">{data.userName}</h4>
-                  <p className="text-sm text-slate-600 mb-2">Pembaruan terakhir: <span className="font-semibold">{data.timestamp}</span></p>
-                  <div className="bg-white p-3 rounded-lg border border-indigo-100 shadow-sm text-sm font-mono text-slate-700">
-                    <div>Lat: {data.lat.toFixed(6)}</div>
-                    <div>Lng: {data.lng.toFixed(6)}</div>
-                  </div>
-                  <a 
-                    href={`https://www.google.com/maps/search/?api=1&query=${data.lat},${data.lng}`}
-                    target="_blank" rel="noreferrer"
-                    className="inline-block mt-3 text-sm text-indigo-600 hover:text-indigo-800 font-medium underline"
-                  >
-                    Lihat di Google Maps
-                  </a>
+            `;
+        };
+
+        const renderMainApp = () => {
+            let activeContentHTML = '';
+            if (activeTab === 'dashboard') activeContentHTML = renderDashboard();
+            if (activeTab === 'reports') activeContentHTML = renderReports();
+            if (activeTab === 'schedule') activeContentHTML = renderSchedule();
+            if (activeTab === 'tracking') activeContentHTML = renderTracking();
+            if (activeTab === 'manage_staff') activeContentHTML = renderManageStaff();
+
+            const isManagerOrSpv = currentUser.role === 'manager' || currentUser.role === 'supervisor';
+
+            return `
+                <div class="min-h-screen bg-slate-50 flex flex-col md:flex-row">
+                    <!-- Sidebar Navigasi -->
+                    <div class="w-full md:w-64 bg-slate-900 text-white flex flex-col">
+                        <div class="p-6 text-center border-b border-slate-800">
+                            <h2 class="text-xl font-bold flex items-center justify-center gap-2">
+                                <i data-lucide="clock" class="w-6 h-6 text-blue-400"></i>
+                                Absensi FBS - Luminor Hotel Banyuwangi
+                            </h2>
+                            <p class="text-xs text-slate-400 mt-2">Login sebagai: ${currentUser.name}</p>
+                        </div>
+                        <nav class="flex-1 p-4 space-y-2">
+                            ${renderNavButton('clock', 'Dashboard / Absen', 'dashboard')}
+                            ${isManagerOrSpv ? `
+                                ${renderNavButton('file-text', 'Laporan', 'reports')}
+                                ${renderNavButton('calendar', 'Jadwal', 'schedule')}
+                                ${renderNavButton('navigation', 'Tracking Staf', 'tracking')}
+                                ${renderNavButton('users', 'Kelola Staf', 'manage_staff')}
+                            ` : ''}
+                        </nav>
+                        <div class="p-4 border-t border-slate-800">
+                            <button onclick="handleLogout()" class="w-full flex items-center gap-3 text-slate-300 hover:text-white hover:bg-slate-800 p-3 rounded-lg transition-colors">
+                                <i data-lucide="log-out" class="w-5 h-5"></i> Keluar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Konten Utama -->
+                    <div class="flex-1 overflow-auto p-4 md:p-8">
+                        ${activeContentHTML}
+                    </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+            `;
+        };
+
+        // --- FUNGSI RENDER UTAMA ---
+        const renderApp = () => {
+            const appRoot = document.getElementById('app-root');
+            if (!currentUser) {
+                appRoot.innerHTML = renderLogin();
+            } else {
+                appRoot.innerHTML = renderMainApp();
+            }
+            // Inisialisasi ulang Lucide icon setelah render DOM baru
+            lucide.createIcons();
+        };
+
+        // Init App pertama kali
+        renderApp();
+    </script>
+</body>
+</html>
