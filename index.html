@@ -16,9 +16,9 @@
 
     <script>
         // --- MOCK DATA & KONFIGURASI ---
-        const COMPANY_LOCATION = {
-            lat: -6.175392, // Contoh: Koordinat Monas, Jakarta
-            lng: 106.827153,
+        let COMPANY_LOCATION = {
+            lat: -8.1830133, // Diubah sesuai instruksi
+            lng: 114.3818953, // Diubah sesuai instruksi
             radius: 200 // dalam meter
         };
 
@@ -81,6 +81,7 @@
 
         // State untuk form Manage Staff
         let manageStaffError = '';
+        let editingUserId = null; // State tambahan untuk fitur edit staf
 
         // --- FUNGSI GLOBAL (Agar bisa dipanggil dari HTML onclick/onsubmit) ---
         window.handleLoginSubmit = (e) => {
@@ -125,6 +126,24 @@
             renderApp();
         };
 
+        // Fungsi baru untuk memperbarui lokasi perusahaan
+        window.handleUpdateCompanyLocation = (e) => {
+            e.preventDefault();
+            const newLat = parseFloat(document.getElementById('compLat').value);
+            const newLng = parseFloat(document.getElementById('compLng').value);
+            const newRad = parseInt(document.getElementById('compRad').value);
+
+            if (!isNaN(newLat) && !isNaN(newLng) && !isNaN(newRad)) {
+                COMPANY_LOCATION.lat = newLat;
+                COMPANY_LOCATION.lng = newLng;
+                COMPANY_LOCATION.radius = newRad;
+                dashboardState.message = 'Lokasi dan radius perusahaan berhasil diperbarui.';
+            } else {
+                dashboardState.message = 'Gagal: Format lokasi tidak valid.';
+            }
+            renderApp();
+        };
+
         window.handleDashboardAction = async (actionType) => {
             dashboardState.loading = true;
             dashboardState.message = '';
@@ -154,7 +173,7 @@
                 // 2. Validasi Clock In
                 if (actionType === 'clock_in' && !inArea && !dashboardState.isOutsideClient) {
                     dashboardState.loading = false;
-                    dashboardState.message = 'Gagal: Anda berada di luar area perusahaan (Radius 200m).';
+                    dashboardState.message = `Gagal: Anda berada di luar area perusahaan (Jarak melebihi ${COMPANY_LOCATION.radius}m).`;
                     renderApp();
                     return;
                 }
@@ -248,6 +267,20 @@
             renderApp(); // Render ulang untuk memperbarui tabel
         };
 
+        // Fungsi baru untuk memicu mode Edit Staf
+        window.handleEditStaff = (id) => {
+            editingUserId = id;
+            manageStaffError = '';
+            renderApp();
+        };
+
+        // Fungsi baru untuk membatalkan mode Edit Staf
+        window.handleCancelEditStaff = () => {
+            editingUserId = null;
+            manageStaffError = '';
+            renderApp();
+        };
+
         window.handleAddStaff = (e) => {
             e.preventDefault();
             manageStaffError = '';
@@ -270,21 +303,36 @@
                 return;
             }
 
-            const checkDuplicate = userList.find(u => u.nickname.toLowerCase() === newNickname.toLowerCase());
+            // Pengecekan duplikat nama panggilan (mengabaikan user yang sedang diedit)
+            const checkDuplicate = userList.find(u => u.nickname.toLowerCase() === newNickname.toLowerCase() && u.id !== editingUserId);
             if (checkDuplicate) {
                 manageStaffError = 'Nama Panggilan ini sudah digunakan, silakan pilih yang lain.';
                 renderApp();
                 return;
             }
             
-            userList.push({
-                id: Date.now(),
-                name: newName,
-                nickname: newNickname,
-                phone: newPhone,
-                pin: newPin,
-                role: newRole
-            });
+            if (editingUserId) {
+                // Update / Edit akun yang ada
+                const index = userList.findIndex(u => u.id === editingUserId);
+                if (index !== -1) {
+                    userList[index].name = newName;
+                    userList[index].nickname = newNickname;
+                    userList[index].phone = newPhone;
+                    userList[index].pin = newPin;
+                    userList[index].role = newRole;
+                }
+                editingUserId = null; // Keluar dari mode edit setelah sukses
+            } else {
+                // Tambah akun baru
+                userList.push({
+                    id: Date.now(),
+                    name: newName,
+                    nickname: newNickname,
+                    phone: newPhone,
+                    pin: newPin,
+                    role: newRole
+                });
+            }
             
             renderApp();
         };
@@ -356,6 +404,49 @@
             const isBreakEndDisabled = dashboardState.loading || !currentRecord || currentRecord.breakStart === '-' || currentRecord.breakEnd !== '-';
             const isClockOutDisabled = dashboardState.loading || !currentRecord || currentRecord.clockOut !== '-';
 
+            const isManagerOrSpv = currentUser.role === 'manager' || currentUser.role === 'supervisor';
+
+            // HTML form pengaturan lokasi khusus untuk Manager & Supervisor
+            let locationSettingsHTML = '';
+            if (isManagerOrSpv) {
+                locationSettingsHTML = `
+                    <div class="mt-4 pt-4 border-t border-orange-200">
+                        <h5 class="font-semibold text-orange-800 mb-2 text-sm">Atur Lokasi & Jarak Absen (Manager/Supervisor)</h5>
+                        <form onsubmit="handleUpdateCompanyLocation(event)" class="flex flex-wrap gap-3 items-end">
+                            <div class="flex-1 min-w-[150px]">
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Latitude</label>
+                                <input id="compLat" type="number" step="any" value="${COMPANY_LOCATION.lat}" class="w-full p-2 border rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none" required />
+                            </div>
+                            <div class="flex-1 min-w-[150px]">
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Longitude</label>
+                                <input id="compLng" type="number" step="any" value="${COMPANY_LOCATION.lng}" class="w-full p-2 border rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none" required />
+                            </div>
+                            <div class="flex-1 min-w-[150px]">
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Radius Absen (meter)</label>
+                                <input id="compRad" type="number" value="${COMPANY_LOCATION.radius}" class="w-full p-2 border rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none" required />
+                            </div>
+                            <button type="submit" class="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 font-medium text-sm">
+                                Simpan Lokasi
+                            </button>
+                        </form>
+                        
+                        <!-- PETA GOOGLE MAPS TAMBAHAN -->
+                        <div class="mt-4 w-full rounded-lg overflow-hidden border border-slate-300">
+                            <iframe 
+                                width="100%" 
+                                height="250" 
+                                frameborder="0" 
+                                scrolling="no" 
+                                marginheight="0" 
+                                marginwidth="0" 
+                                src="https://maps.google.com/maps?q=${COMPANY_LOCATION.lat},${COMPANY_LOCATION.lng}&hl=id&z=17&output=embed">
+                            </iframe>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-2">* Peta di atas menampilkan titik lokasi yang digunakan saat ini. Setiap perubahan pada form di atas akan mengubah titik pada peta ini.</p>
+                    </div>
+                `;
+            }
+
             return `
                 <div class="space-y-6 max-w-4xl mx-auto">
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -384,6 +475,7 @@
                                 Mode Tugas Luar / Bertemu Klien (Bypass Geofencing & Aktifkan Tracking)
                             </label>
                         </div>
+                        ${locationSettingsHTML}
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -606,6 +698,9 @@
         };
 
         const renderManageStaff = () => {
+            // Cek apakah ada user yang sedang diedit berdasarkan editingUserId
+            const editingUser = editingUserId ? userList.find(u => u.id === editingUserId) : null;
+
             const tableRows = userList.map(u => `
                 <tr class="border-b last:border-0 hover:bg-slate-50">
                     <td class="p-4 font-medium text-slate-800">${u.name}</td>
@@ -613,14 +708,24 @@
                     <td class="p-4 text-slate-600">${u.phone}</td>
                     <td class="p-4 text-slate-600 font-mono tracking-widest">${u.pin}</td>
                     <td class="p-4">${renderRoleBadge(u.role)}</td>
+                    <td class="p-4">
+                        <button onclick="handleEditStaff(${u.id})" class="text-blue-600 hover:text-blue-800 text-sm font-medium underline">
+                            Edit
+                        </button>
+                    </td>
                 </tr>
             `).join('');
+
+            // Menyesuaikan teks judul & tombol berdasarkan apakah sedang edit atau tambah baru
+            const formTitle = editingUser ? "Edit Data Staf" : "Kelola Staf Baru";
+            const formDesc = editingUser ? "Ubah informasi akun untuk staf yang dipilih." : "Daftarkan akun untuk anggota tim baru. Mereka akan login menggunakan Nama Panggilan dan PIN yang Anda buatkan.";
+            const btnSubmitText = editingUser ? "Simpan Perubahan" : "Daftarkan Akun";
 
             return `
                 <div class="space-y-6">
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <h2 class="text-2xl font-bold text-slate-800 mb-2">Kelola Staf Baru</h2>
-                        <p class="text-slate-500 mb-6">Daftarkan akun untuk anggota tim baru. Mereka akan login menggunakan Nama Panggilan dan PIN yang Anda buatkan.</p>
+                        <h2 class="text-2xl font-bold text-slate-800 mb-2">${formTitle}</h2>
+                        <p class="text-slate-500 mb-6">${formDesc}</p>
 
                         ${manageStaffError ? `
                             <div class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm border border-red-200">
@@ -632,34 +737,41 @@
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
-                                    <input id="staffName" type="text" placeholder="Contoh: Reza Rahardian" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                                    <input id="staffName" type="text" value="${editingUser ? editingUser.name : ''}" placeholder="Contoh: Reza Rahardian" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-slate-700 mb-1">Nama Panggilan (Digunakan untuk Login)</label>
-                                    <input id="staffNickname" type="text" placeholder="Contoh: reza" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                                    <input id="staffNickname" type="text" value="${editingUser ? editingUser.nickname : ''}" placeholder="Contoh: reza" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-slate-700 mb-1">Nomor Telepon</label>
-                                    <input id="staffPhone" type="text" placeholder="Contoh: 08123456789" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                                    <input id="staffPhone" type="text" value="${editingUser ? editingUser.phone : ''}" placeholder="Contoh: 08123456789" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-slate-700 mb-1">Buat PIN (4 Digit Angka)</label>
-                                    <input id="staffPin" type="text" maxlength="4" pattern="\\d{4}" placeholder="Contoh: 1234" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" oninput="this.value = this.value.replace(/\\D/g, '')" />
+                                    <input id="staffPin" type="text" value="${editingUser ? editingUser.pin : ''}" maxlength="4" pattern="\\d{4}" placeholder="Contoh: 1234" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" oninput="this.value = this.value.replace(/\\D/g, '')" />
                                 </div>
                                 <div class="md:col-span-2">
                                     <label class="block text-sm font-medium text-slate-700 mb-1">Role / Peran</label>
                                     <select id="staffRole" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                                        <option value="staff">Staff</option>
-                                        <option value="casual">Casual</option>
-                                        <option value="trainee">Trainee</option>
-                                        <option value="supervisor">Supervisor</option>
-                                        <option value="manager">Manager</option>
+                                        <option value="staff" ${editingUser && editingUser.role === 'staff' ? 'selected' : ''}>Staff</option>
+                                        <option value="casual" ${editingUser && editingUser.role === 'casual' ? 'selected' : ''}>Casual</option>
+                                        <option value="trainee" ${editingUser && editingUser.role === 'trainee' ? 'selected' : ''}>Trainee</option>
+                                        <option value="supervisor" ${editingUser && editingUser.role === 'supervisor' ? 'selected' : ''}>Supervisor</option>
+                                        <option value="manager" ${editingUser && editingUser.role === 'manager' ? 'selected' : ''}>Manager</option>
                                     </select>
                                 </div>
                             </div>
-                            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium w-full md:w-auto self-start mt-2">
-                                Daftarkan Akun
-                            </button>
+                            <div class="flex gap-3 mt-2">
+                                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium">
+                                    ${btnSubmitText}
+                                </button>
+                                ${editingUser ? `
+                                    <button type="button" onclick="handleCancelEditStaff()" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg hover:bg-slate-400 font-medium">
+                                        Batal Edit
+                                    </button>
+                                ` : ''}
+                            </div>
                         </form>
                     </div>
 
@@ -673,6 +785,7 @@
                                         <th class="p-4 font-semibold">No. Telepon</th>
                                         <th class="p-4 font-semibold">PIN</th>
                                         <th class="p-4 font-semibold">Role</th>
+                                        <th class="p-4 font-semibold">Aksi</th> <!-- Kolom Aksi Baru -->
                                     </tr>
                                 </thead>
                                 <tbody>
