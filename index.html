@@ -83,6 +83,35 @@
         let manageStaffError = '';
         let editingUserId = null; // State tambahan untuk fitur edit staf
 
+        // --- FUNGSI LOCAL STORAGE (Tambahan untuk menyimpan data permanen) ---
+        const loadFromLocalStorage = () => {
+            const savedLocation = localStorage.getItem('absensi_location');
+            if (savedLocation) COMPANY_LOCATION = JSON.parse(savedLocation);
+
+            const savedUsers = localStorage.getItem('absensi_userList');
+            if (savedUsers) userList = JSON.parse(savedUsers);
+
+            const savedRecords = localStorage.getItem('absensi_records');
+            if (savedRecords) attendanceRecords = JSON.parse(savedRecords);
+
+            const savedSchedules = localStorage.getItem('absensi_schedules');
+            if (savedSchedules) schedules = JSON.parse(savedSchedules);
+
+            const savedTracking = localStorage.getItem('absensi_tracking');
+            if (savedTracking) trackingData = JSON.parse(savedTracking);
+        };
+
+        const saveToLocalStorage = () => {
+            localStorage.setItem('absensi_location', JSON.stringify(COMPANY_LOCATION));
+            localStorage.setItem('absensi_userList', JSON.stringify(userList));
+            localStorage.setItem('absensi_records', JSON.stringify(attendanceRecords));
+            localStorage.setItem('absensi_schedules', JSON.stringify(schedules));
+            localStorage.setItem('absensi_tracking', JSON.stringify(trackingData));
+        };
+
+        // Panggil fungsi load saat aplikasi pertama kali dijalankan
+        loadFromLocalStorage();
+
         // --- FUNGSI GLOBAL (Agar bisa dipanggil dari HTML onclick/onsubmit) ---
         window.handleLoginSubmit = (e) => {
             e.preventDefault();
@@ -138,6 +167,7 @@
                 COMPANY_LOCATION.lng = newLng;
                 COMPANY_LOCATION.radius = newRad;
                 dashboardState.message = 'Lokasi dan radius perusahaan berhasil diperbarui.';
+                saveToLocalStorage(); // Simpan perubahan lokasi
             } else {
                 dashboardState.message = 'Gagal: Format lokasi tidak valid.';
             }
@@ -211,6 +241,7 @@
                 }
 
                 dashboardState.message = `Berhasil ${actionType.replace('_', ' ').toUpperCase()}`;
+                saveToLocalStorage(); // Simpan riwayat absensi terbaru
             } catch (error) {
                 dashboardState.message = `Error: ${error}`;
             }
@@ -228,6 +259,7 @@
             trackingData.push({ userId: currentUser.id, userName: currentUser.name, lat: randomLat, lng: randomLng, timestamp: timeNow, note: 'Lokasi diperbarui' });
             
             dashboardState.message = 'Lokasi live berhasil diperbarui untuk tracking.';
+            saveToLocalStorage(); // Simpan riwayat pelacakan terbaru
             renderApp();
         };
 
@@ -264,6 +296,7 @@
             if (!userId || !date || !shift) return;
             
             schedules.push({ id: Date.now(), userId: parseInt(userId), date, shift });
+            saveToLocalStorage(); // Simpan jadwal kerja terbaru
             renderApp(); // Render ulang untuk memperbarui tabel
         };
 
@@ -334,6 +367,7 @@
                 });
             }
             
+            saveToLocalStorage(); // Simpan perubahan atau penambahan staf ke database memori
             renderApp();
         };
 
