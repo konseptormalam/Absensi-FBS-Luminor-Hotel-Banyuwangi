@@ -1,929 +1,446 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Absensi FBS - Luminor Hotel Banyuwangi</title>
+    <title>Adrisya Decoration - Mahar & Seserahan Banyuwangi</title>
+    
+    <!-- Google Fonts: Playfair Display untuk kesan elegan/wedding, Lato untuk teks biasa -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome untuk Icon WhatsApp & lainnya -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-<body class="bg-slate-50 min-h-screen font-sans text-slate-800">
     
-    <!-- Wadah Utama Aplikasi -->
-    <div id="app-root"></div>
-
+    <!-- Konfigurasi Custom Tema Adrisya Kuning & Putih -->
     <script>
-        // --- MOCK DATA & KONFIGURASI ---
-        let COMPANY_LOCATION = {
-            lat: -8.1830133, // Diubah sesuai instruksi
-            lng: 114.3818953, // Diubah sesuai instruksi
-            radius: 200 // dalam meter
-        };
-
-        const USERS = [
-            { id: 1, name: 'Manager', nickname: 'manager', phone: '080000000001', pin: '1234', role: 'manager' },
-            { id: 2, name: 'Supervisor', nickname: 'supervisor', phone: '080000000002', pin: '1234', role: 'supervisor' },
-            { id: 3, name: 'Staf', nickname: 'staf', phone: '080000000003', pin: '1234', role: 'staff' },
-            { id: 4, name: 'Casual', nickname: 'casual', phone: '080000000004', pin: '1234', role: 'casual' },
-            { id: 5, name: 'Trainee', nickname: 'trainee', phone: '080000000005', pin: '1234', role: 'trainee' }
-        ];
-
-        // --- FUNGSI UTILITAS ---
-        const calculateDistance = (lat1, lon1, lat2, lon2) => {
-            const R = 6371e3; // Radius bumi dalam meter
-            const φ1 = lat1 * Math.PI/180;
-            const φ2 = lat2 * Math.PI/180;
-            const Δφ = (lat2-lat1) * Math.PI/180;
-            const Δλ = (lon2-lon1) * Math.PI/180;
-
-            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                        Math.cos(φ1) * Math.cos(φ2) *
-                        Math.sin(Δλ/2) * Math.sin(Δλ/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-            return R * c; 
-        };
-
-        const getFormattedTime = () => {
-            const now = new Date();
-            return now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        };
-
-        const getFormattedDate = () => {
-            const now = new Date();
-            return now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        };
-
-        // --- STATE APLIKASI (Pengganti useState React) ---
-        let currentUser = null;
-        let activeTab = 'dashboard';
-        
-        let userList = JSON.parse(JSON.stringify(USERS)); // Deep copy array USERS awal
-        let attendanceRecords = [];
-        let schedules = [
-            { id: 1, userId: 3, date: new Date().toISOString().split('T')[0], shift: '08:00 - 17:00' },
-            { id: 2, userId: 4, date: new Date().toISOString().split('T')[0], shift: '09:00 - 18:00' }
-        ];
-        let trackingData = [];
-
-        // State untuk form login
-        let loginError = '';
-
-        // State untuk Dashboard
-        let dashboardState = {
-            loading: false,
-            message: '',
-            simulateInArea: true,
-            isOutsideClient: false
-        };
-
-        // State untuk form Manage Staff
-        let manageStaffError = '';
-        let editingUserId = null; // State tambahan untuk fitur edit staf
-
-        // --- FUNGSI LOCAL STORAGE (Tambahan untuk menyimpan data permanen) ---
-        const loadFromLocalStorage = () => {
-            const savedLocation = localStorage.getItem('absensi_location');
-            if (savedLocation) COMPANY_LOCATION = JSON.parse(savedLocation);
-
-            const savedUsers = localStorage.getItem('absensi_userList');
-            if (savedUsers) userList = JSON.parse(savedUsers);
-
-            const savedRecords = localStorage.getItem('absensi_records');
-            if (savedRecords) attendanceRecords = JSON.parse(savedRecords);
-
-            const savedSchedules = localStorage.getItem('absensi_schedules');
-            if (savedSchedules) schedules = JSON.parse(savedSchedules);
-
-            const savedTracking = localStorage.getItem('absensi_tracking');
-            if (savedTracking) trackingData = JSON.parse(savedTracking);
-        };
-
-        const saveToLocalStorage = () => {
-            localStorage.setItem('absensi_location', JSON.stringify(COMPANY_LOCATION));
-            localStorage.setItem('absensi_userList', JSON.stringify(userList));
-            localStorage.setItem('absensi_records', JSON.stringify(attendanceRecords));
-            localStorage.setItem('absensi_schedules', JSON.stringify(schedules));
-            localStorage.setItem('absensi_tracking', JSON.stringify(trackingData));
-        };
-
-        // Panggil fungsi load saat aplikasi pertama kali dijalankan
-        loadFromLocalStorage();
-
-        // --- FUNGSI GLOBAL (Agar bisa dipanggil dari HTML onclick/onsubmit) ---
-        window.handleLoginSubmit = (e) => {
-            e.preventDefault();
-            loginError = '';
-            
-            // PERBAIKAN: Menambahkan .trim() untuk membuang spasi kosong tidak sengaja di input
-            const nicknameInput = document.getElementById('loginNickname').value.trim();
-            const pinInput = document.getElementById('loginPin').value.trim();
-
-            const user = userList.find(u => 
-                // PERBAIKAN: Menambahkan .trim() saat mengecek database memori
-                u.nickname.trim().toLowerCase() === nicknameInput.toLowerCase() && 
-                u.pin.trim() === pinInput
-            );
-
-            if (user) {
-                currentUser = user;
-                activeTab = 'dashboard';
-            } else {
-                loginError = 'Nama panggilan atau PIN salah.';
-            }
-            renderApp();
-        };
-
-        window.handleLogout = () => {
-            currentUser = null;
-            loginError = '';
-            renderApp();
-        };
-
-        window.setActiveTab = (tabName) => {
-            activeTab = tabName;
-            renderApp();
-        };
-
-        window.toggleSimulateInArea = (checked) => {
-            dashboardState.simulateInArea = checked;
-            renderApp();
-        };
-
-        window.toggleIsOutsideClient = (checked) => {
-            dashboardState.isOutsideClient = checked;
-            renderApp();
-        };
-
-        // Fungsi baru untuk memperbarui lokasi perusahaan
-        window.handleUpdateCompanyLocation = (e) => {
-            e.preventDefault();
-            const newLat = parseFloat(document.getElementById('compLat').value);
-            const newLng = parseFloat(document.getElementById('compLng').value);
-            const newRad = parseInt(document.getElementById('compRad').value);
-
-            if (!isNaN(newLat) && !isNaN(newLng) && !isNaN(newRad)) {
-                COMPANY_LOCATION.lat = newLat;
-                COMPANY_LOCATION.lng = newLng;
-                COMPANY_LOCATION.radius = newRad;
-                dashboardState.message = 'Lokasi dan radius perusahaan berhasil diperbarui.';
-                saveToLocalStorage(); // Simpan perubahan lokasi
-            } else {
-                dashboardState.message = 'Gagal: Format lokasi tidak valid.';
-            }
-            renderApp();
-        };
-
-        window.handleDashboardAction = async (actionType) => {
-            dashboardState.loading = true;
-            dashboardState.message = '';
-            renderApp();
-
-            try {
-                let locationData = { lat: 0, lng: 0 };
-                let inArea = false;
-
-                // 1. Dapatkan Lokasi
-                // PERBAIKAN: Jika staf sedang di mode "Tugas Luar", kita mengabaikan centang simulasi
-                // dan mewajibkan penarikan lokasi GPS ASLI dari perangkat untuk mencegah kebohongan.
-                if (dashboardState.simulateInArea && !dashboardState.isOutsideClient) {
-                    locationData = COMPANY_LOCATION;
-                    inArea = true;
-                    await new Promise(r => setTimeout(r, 500)); // Simulasi delay
-                } else {
-                    locationData = await new Promise((resolve, reject) => {
-                        if (!navigator.geolocation) reject('Geolokasi tidak didukung browser ini.');
-                        navigator.geolocation.getCurrentPosition(
-                            pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                            err => reject('Akses lokasi ditolak. WAJIB aktifkan GPS perangkat Anda untuk Tugas Luar.')
-                        );
-                    });
-                    const distance = calculateDistance(locationData.lat, locationData.lng, COMPANY_LOCATION.lat, COMPANY_LOCATION.lng);
-                    inArea = distance <= COMPANY_LOCATION.radius;
-                }
-
-                // 2. Validasi Clock In
-                if (actionType === 'clock_in' && !inArea && !dashboardState.isOutsideClient) {
-                    dashboardState.loading = false;
-                    dashboardState.message = `Gagal: Anda berada di luar area perusahaan (Jarak melebihi ${COMPANY_LOCATION.radius}m).`;
-                    renderApp();
-                    return;
-                }
-
-                // 3. Proses Status Absensi
-                const timeNow = getFormattedTime();
-                const today = new Date().toISOString().split('T')[0];
-                const currentRecordIndex = attendanceRecords.findIndex(r => r.userId === currentUser.id && r.date === today);
-
-                if (actionType === 'clock_in') {
-                    attendanceRecords.push({
-                        id: Date.now(),
-                        userId: currentUser.id,
-                        userName: currentUser.name,
-                        date: today,
-                        clockIn: timeNow,
-                        clockOut: '-',
-                        breakStart: '-',
-                        breakEnd: '-',
-                        status: dashboardState.isOutsideClient ? 'Tugas Luar' : 'Hadir',
-                        location: locationData
-                    });
-                    
-                    if (dashboardState.isOutsideClient) {
-                        trackingData = trackingData.filter(p => p.userId !== currentUser.id);
-                        trackingData.push({ userId: currentUser.id, userName: currentUser.name, lat: locationData.lat, lng: locationData.lng, timestamp: timeNow });
-                    }
-                } else if (currentRecordIndex !== -1) {
-                    if (actionType === 'break_start') attendanceRecords[currentRecordIndex].breakStart = timeNow;
-                    if (actionType === 'break_end') attendanceRecords[currentRecordIndex].breakEnd = timeNow;
-                    if (actionType === 'clock_out') {
-                        attendanceRecords[currentRecordIndex].clockOut = timeNow;
-                        trackingData = trackingData.filter(p => p.userId !== currentUser.id);
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            white: '#ffffff',
+                            card: '#fefdf0', // Kuning/Krem sangat muda untuk background kartu
+                            yellow: '#c5a059', // Kuning/Gold sesuai aksen logo
+                            yellowhover: '#b08d4a', // Kuning sedikit lebih gelap untuk efek hover
+                            darktext: '#333333' // Abu-abu gelap untuk teks agar kontras
+                        }
+                    },
+                    fontFamily: {
+                        serif: ['"Playfair Display"', 'serif'],
+                        sans: ['Lato', 'sans-serif'],
                     }
                 }
-
-                dashboardState.message = `Berhasil ${actionType.replace('_', ' ').toUpperCase()}`;
-                saveToLocalStorage(); // Simpan riwayat absensi terbaru
-            } catch (error) {
-                dashboardState.message = `Error: ${error}`;
             }
-            
-            dashboardState.loading = false;
-            renderApp();
-        };
+        }
+    </script>
+    
+    <!-- CSS Tambahan untuk menyembunyikan scrollbar di carousel -->
+    <style>
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-brand-white text-brand-darktext font-sans antialiased selection:bg-brand-yellow selection:text-brand-white">
 
-        // PERBAIKAN: Mengubah sistem Update Lokasi menjadi wajib mengambil GPS nyata, bukan random number.
-        window.handleUpdateLocation = async () => {
-            dashboardState.loading = true;
-            dashboardState.message = 'Mengambil lokasi GPS asli perangkat...';
-            renderApp();
+    <!-- Nomor WhatsApp Admin -->
+    <script>
+        const waNumber = "6289669636206"; // Diperbarui sesuai instruksi
+    </script>
 
-            try {
-                const locationData = await new Promise((resolve, reject) => {
-                    if (!navigator.geolocation) reject('Geolokasi tidak didukung browser ini.');
-                    navigator.geolocation.getCurrentPosition(
-                        pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                        err => reject('Akses lokasi ditolak. WAJIB aktifkan GPS perangkat Anda agar valid.')
-                    );
-                });
-
-                const timeNow = getFormattedTime();
-                
-                trackingData = trackingData.filter(p => p.userId !== currentUser.id);
-                trackingData.push({ userId: currentUser.id, userName: currentUser.name, lat: locationData.lat, lng: locationData.lng, timestamp: timeNow, note: 'Lokasi asli diperbarui' });
-                
-                dashboardState.message = 'Lokasi asli berhasil diperbarui dan dikirim ke Manager.';
-                saveToLocalStorage(); // Simpan riwayat pelacakan terbaru
-            } catch (error) {
-                dashboardState.message = `Gagal Update Lokasi: ${error}`;
-            }
-
-            dashboardState.loading = false;
-            renderApp();
-        };
-
-        window.exportToCSV = () => {
-            const headers = ['Nama', 'Tanggal', 'Status', 'Clock In', 'Break Start', 'Break End', 'Clock Out'];
-            const rows = attendanceRecords.map(r => [
-                r.userName, 
-                r.date, 
-                r.status, 
-                r.clockIn, 
-                r.breakStart, 
-                r.breakEnd, 
-                r.clockOut
-            ]);
-            
-            const csvContent = "data:text/csv;charset=utf-8," 
-                + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-            
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `laporan_absensi_${new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        };
-
-        window.handleAddSchedule = (e) => {
-            e.preventDefault();
-            const userId = document.getElementById('schedUserId').value;
-            const date = document.getElementById('schedDate').value;
-            const shift = document.getElementById('schedShift').value;
-
-            if (!userId || !date || !shift) return;
-            
-            schedules.push({ id: Date.now(), userId: parseInt(userId), date, shift });
-            saveToLocalStorage(); // Simpan jadwal kerja terbaru
-            renderApp(); // Render ulang untuk memperbarui tabel
-        };
-
-        // Fungsi baru untuk memicu mode Edit Staf
-        window.handleEditStaff = (id) => {
-            editingUserId = id;
-            manageStaffError = '';
-            renderApp();
-        };
-
-        // Fungsi baru untuk membatalkan mode Edit Staf
-        window.handleCancelEditStaff = () => {
-            editingUserId = null;
-            manageStaffError = '';
-            renderApp();
-        };
-
-        window.handleAddStaff = (e) => {
-            e.preventDefault();
-            manageStaffError = '';
-
-            // PERBAIKAN: Menambahkan .trim() untuk menghapus spasi awal/akhir agar database lebih bersih
-            const newName = document.getElementById('staffName').value.trim();
-            const newNickname = document.getElementById('staffNickname').value.trim();
-            const newPhone = document.getElementById('staffPhone').value.trim();
-            const newPin = document.getElementById('staffPin').value.trim();
-            const newRole = document.getElementById('staffRole').value;
-
-            if (!newName || !newNickname || !newPhone || !newPin) {
-                manageStaffError = 'Semua kolom wajib diisi.';
-                renderApp();
-                return;
-            }
-
-            if (newPin.length !== 4 || !/^\d+$/.test(newPin)) {
-                manageStaffError = 'PIN harus terdiri dari 4 digit angka.';
-                renderApp();
-                return;
-            }
-
-            // PERBAIKAN: Menambahkan .trim() pada pengecekan duplikat
-            const checkDuplicate = userList.find(u => u.nickname.trim().toLowerCase() === newNickname.toLowerCase() && u.id !== editingUserId);
-            if (checkDuplicate) {
-                manageStaffError = 'Nama Panggilan ini sudah digunakan, silakan pilih yang lain.';
-                renderApp();
-                return;
-            }
-            
-            if (editingUserId) {
-                // Update / Edit akun yang ada
-                const index = userList.findIndex(u => u.id === editingUserId);
-                if (index !== -1) {
-                    userList[index].name = newName;
-                    userList[index].nickname = newNickname;
-                    userList[index].phone = newPhone;
-                    userList[index].pin = newPin;
-                    userList[index].role = newRole;
-                }
-                editingUserId = null; // Keluar dari mode edit setelah sukses
-            } else {
-                // Tambah akun baru
-                userList.push({
-                    id: Date.now(),
-                    name: newName,
-                    nickname: newNickname,
-                    phone: newPhone,
-                    pin: newPin,
-                    role: newRole
-                });
-            }
-            
-            saveToLocalStorage(); // Simpan perubahan atau penambahan staf ke database memori
-            renderApp();
-        };
-
-        // --- SISTEM RENDER UI (Pengganti JSX) ---
-        const renderLogin = () => `
-            <div class="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-                <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
-                    <div class="text-center mb-8">
-                        <div class="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i data-lucide="clock" class="text-white w-8 h-8"></i>
-                        </div>
-                        <h1 class="text-2xl font-bold text-slate-800">Absensi FBS - Luminor Hotel Banyuwangi</h1>
-                        <p class="text-slate-500 mt-2">Silakan masukkan nama panggilan dan 4 digit PIN</p>
-                    </div>
-
-                    ${loginError ? `
-                    <div class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm border border-red-200">
-                        ${loginError}
-                    </div>` : ''}
-
-                    <form onsubmit="handleLoginSubmit(event)" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Nama Panggilan</label>
-                            <input id="loginNickname" type="text" placeholder="Masukkan nama panggilan" required
-                                class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">PIN (4 Angka)</label>
-                            <input id="loginPin" type="password" maxlength="4" pattern="\\d{4}" placeholder="Contoh: 1234" required
-                                class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                        </div>
-                        <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold mt-2">
-                            Masuk
-                        </button>
-                    </form>
+    <!-- NAVBAR -->
+    <nav class="fixed w-full z-50 bg-brand-white/90 backdrop-blur-md border-b border-brand-yellow/30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <div class="flex-shrink-0 flex items-center gap-3">
+                    <!-- Logo di Navbar diubah menggunakan format link Google alternatif -->
+                    <img src="https://lh3.googleusercontent.com/d/1UCgEa8Zs3IfwbUfk911JYhhJqSuqH5ZD" alt="Logo Adrisya" class="h-12 w-12 object-contain rounded-full border border-brand-yellow/50" onerror="this.src='https://placehold.co/100x100/ffffff/c5a059?text=AD'">
+                    <span class="font-serif font-bold text-xl tracking-wider text-brand-yellow">Adrisya Decoration</span>
+                </div>
+                <div class="hidden md:flex space-x-8">
+                    <a href="#beranda" class="text-gray-600 hover:text-brand-yellow transition duration-300">Beranda</a>
+                    <a href="#paket" class="text-gray-600 hover:text-brand-yellow transition duration-300">Pilihan Paket</a>
+                    <a href="#katalog" class="text-gray-600 hover:text-brand-yellow transition duration-300">Katalog</a>
+                    <!-- Nambihan tautan pikeun Sarat jeung Katangtuan -->
+                    <a href="#syarat" class="text-gray-600 hover:text-brand-yellow transition duration-300">Syarat dan Ketentuan</a>
+                </div>
+                <div class="hidden md:flex">
+                    <a href="https://wa.me/6289669636206?text=Halo%20Adrisya%20Decoration,%20saya%20ingin%20bertanya%20seputar%20mahar%20dan%20seserahan." target="_blank" class="bg-brand-yellow hover:bg-brand-yellowhover text-brand-white px-5 py-2 rounded-full font-bold transition duration-300 flex items-center gap-2">
+                        <i class="fab fa-whatsapp text-lg"></i> Hubungi Admin
+                    </a>
                 </div>
             </div>
-        `;
+        </div>
+    </nav>
 
-        const renderNavButton = (icon, label, targetTab) => {
-            const isActive = activeTab === targetTab;
-            const baseClass = "w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left";
-            const activeClass = isActive ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-slate-800 hover:text-white";
-            return `
-                <button onclick="setActiveTab('${targetTab}')" class="${baseClass} ${activeClass}">
-                    <i data-lucide="${icon}" class="w-5 h-5"></i>
-                    <span class="font-medium">${label}</span>
-                </button>
-            `;
-        };
+    <!-- HERO SECTION -->
+    <section id="beranda" class="relative pt-32 pb-20 md:pt-40 md:pb-28 px-4 bg-[url('https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center bg-no-repeat">
+        <!-- Overlay transparan agar teks tetap terbaca di atas background -->
+        <div class="absolute inset-0 bg-brand-white/80 backdrop-blur-[2px]"></div>
+        
+        <div class="relative z-10 max-w-7xl mx-auto grid md:grid-cols-2 gap-12 items-center">
+            <div class="space-y-6 order-2 md:order-1 text-center md:text-left">
+                <p class="text-brand-yellow font-serif italic text-xl">Sempurnakan Momen Bahagia Anda</p>
+                <h1 class="text-4xl md:text-5xl lg:text-6xl font-serif font-bold leading-tight">
+                    Spesialis Mahar & <br>
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-yellow to-yellow-600">Seserahan Elegan</span>
+                </h1>
+                <p class="text-gray-600 text-lg md:text-xl max-w-lg mx-auto md:mx-0">
+                    Kami hadir untuk mempercantik hari spesial Anda dengan sentuhan estetika pada mahar dan kotak seserahan yang tak terlupakan.
+                </p>
+                <div class="pt-4 flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
+                    <a href="#paket" class="bg-brand-yellow hover:bg-brand-yellowhover text-brand-white px-8 py-3 rounded-full font-bold transition duration-300 text-center text-lg shadow-[0_4px_15px_rgba(197,160,89,0.4)]">
+                        Lihat Harga
+                    </a>
+                    <a href="#katalog" class="bg-brand-white border border-brand-yellow text-brand-yellow hover:bg-brand-yellow hover:text-brand-white px-8 py-3 rounded-full font-bold transition duration-300 text-center text-lg flex items-center justify-center gap-2">
+                        <i class="fas fa-book-open"></i> Lihat Katalog
+                    </a>
+                </div>
+            </div>
+            <div class="order-1 md:order-2 flex justify-center">
+                <!-- Memanggil gambar yang diupload user. Jika tidak ditemukan (karena beda folder), akan memanggil placeholder -->
+                <div class="relative w-72 h-72 md:w-96 md:h-96 rounded-full p-2 border-2 border-dashed border-brand-yellow animate-[spin_30s_linear_infinite]">
+                    <div class="w-full h-full rounded-full overflow-hidden bg-brand-white animate-[spin_30s_linear_infinite_reverse]">
+                        <!-- Logo di Hero Section diubah menggunakan format link Google alternatif -->
+                        <img src="https://lh3.googleusercontent.com/d/1UCgEa8Zs3IfwbUfk911JYhhJqSuqH5ZD" alt="Adrisya Decoration Logo" class="w-full h-full object-contain" onerror="this.src='https://placehold.co/500x500/ffffff/c5a059?text=Adrisya+Decoration'">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-        const renderRoleBadge = (role) => {
-            let colorClass = 'bg-green-100 text-green-700';
-            if (role === 'manager') colorClass = 'bg-purple-100 text-purple-700';
-            else if (role === 'supervisor') colorClass = 'bg-orange-100 text-orange-700';
-            else if (role === 'casual') colorClass = 'bg-pink-100 text-pink-700';
-            else if (role === 'trainee') colorClass = 'bg-yellow-100 text-yellow-700';
-            return `<span class="text-xs px-2 py-1 rounded-full ${colorClass}">${role.toUpperCase()}</span>`;
-        };
+    <!-- PRICING / PAKET SECTION -->
+    <section id="paket" class="py-20 bg-brand-card">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-serif font-bold mb-4 text-brand-yellow">Pilihan Paket Kami</h2>
+                <p class="text-gray-600 max-w-2xl mx-auto">Pilih paket mahar dan seserahan yang paling sempurna untuk menyempurnakan hari bahagia Anda. Desain premium, harga bersahabat.</p>
+            </div>
 
-        const renderDashboard = () => {
-            const today = new Date().toISOString().split('T')[0];
-            const currentRecord = attendanceRecords.find(r => r.userId === currentUser.id && r.date === today);
+            <!-- Grid diubah menjadi 5 item yang akan tersusun rapi -->
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                
+                <!-- Paket 1: Tray Putih -->
+                <div class="bg-brand-white border border-yellow-200 rounded-2xl p-8 hover:border-brand-yellow/50 transition duration-300 group shadow-sm hover:shadow-md flex flex-col overflow-hidden">
+                    <div class="w-14 h-14 bg-brand-card rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition duration-300">
+                        <i class="fas fa-box text-2xl text-brand-yellow"></i>
+                    </div>
+                    <h3 class="text-2xl font-serif font-bold mb-2">Tray Putih</h3>
+                    
+                    <!-- Slider Foto Paket 1 -->
+                    <div class="relative w-full h-48 mb-4 rounded-xl overflow-hidden group/slider">
+                        <div class="flex overflow-x-auto hide-scrollbar snap-x snap-mandatory h-full scroll-smooth" id="slider-1">
+                            <!-- Foto 1 (Diupdate dengan link Google Drive) -->
+                            <img src="https://lh3.googleusercontent.com/d/1MGDjDn0qScToc7tlVv3cD_x52IYYhFh_" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Tray Putih 1">
+                            <!-- Foto 2 (Diupdate dengan link Google Drive) -->
+                            <img src="https://lh3.googleusercontent.com/d/1De326NlSXMwL5OLd-5Y3UpuPsZZeEQMR" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Tray Putih 2">
+                            <!-- Foto 3 (Diupdate dengan link Google Drive) -->
+                            <img src="https://lh3.googleusercontent.com/d/1Dhg7PyRYi03qKbgNOfutH-qwJFJkkNTH" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Tray Putih 3">
+                        </div>
+                        <div class="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full pointer-events-none">Geser ></div>
+                    </div>
 
-            // Cek status tombol absensi
-            const isClockInDisabled = dashboardState.loading || currentRecord;
-            const isBreakStartDisabled = dashboardState.loading || !currentRecord || currentRecord.breakStart !== '-' || currentRecord.clockOut !== '-';
-            const isBreakEndDisabled = dashboardState.loading || !currentRecord || currentRecord.breakStart === '-' || currentRecord.breakEnd !== '-';
-            const isClockOutDisabled = dashboardState.loading || !currentRecord || currentRecord.clockOut !== '-';
+                    <div class="text-brand-yellow text-3xl font-bold mb-1">Rp 65.000<span class="text-sm text-gray-500 font-normal"> / box</span></div>
+                    <div class="text-gray-600 font-medium mb-4 pb-4 border-b border-yellow-100">Promo 5 Box: <span class="text-brand-yellow font-bold">Rp 300.000</span></div>
+                    <ul class="text-gray-600 space-y-3 mb-8 flex-grow">
+                        <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-brand-yellow text-sm"></i> Tampilan bersih, estetik & minimalis</li>
+                        <li class="flex items-start gap-2"><i class="fas fa-star mt-1 text-brand-yellow text-sm"></i> <span class="font-bold text-gray-700">Termasuk Sewa Tempat Cincin & Uang ✨</span></li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-brand-yellow text-sm"></i> Hiasan bunga artificial cantik</li>
+                        <li class="flex items-start gap-2"><i class="fas fa-tags mt-1 text-brand-yellow text-sm"></i> Sewa > 5 box harga mengikuti diskon paket</li>
+                    </ul>
+                    <a href="https://wa.me/6289669636206?text=Halo%20Adrisya%20Decoration,%20saya%20tertarik%20Pemesanan%20*Tray%20Putih*." target="_blank" class="block w-full bg-brand-white border border-brand-yellow text-brand-yellow hover:bg-brand-yellow hover:text-brand-white text-center py-3 rounded-lg font-bold transition duration-300 mt-auto">
+                        <i class="fab fa-whatsapp mr-2"></i> Pesan Tray Putih
+                    </a>
+                </div>
 
-            const isManagerOrSpv = currentUser.role === 'manager' || currentUser.role === 'supervisor';
+                <!-- Paket 2: Tray Crystal -->
+                <div class="bg-brand-white border border-brand-yellow rounded-2xl p-8 relative transform md:-translate-y-4 shadow-[0_10px_30px_rgba(197,160,89,0.2)] flex flex-col overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-brand-yellow text-brand-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-lg z-10">BEST SELLER</div>
+                    <div class="w-14 h-14 bg-brand-card rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition duration-300">
+                        <i class="fas fa-gem text-2xl text-brand-yellow"></i>
+                    </div>
+                    <h3 class="text-2xl font-serif font-bold mb-2">Tray Crystal</h3>
+                    
+                    <!-- Slider Foto Paket 2 -->
+                    <div class="relative w-full h-48 mb-4 rounded-xl overflow-hidden group/slider">
+                        <div class="flex overflow-x-auto hide-scrollbar snap-x snap-mandatory h-full scroll-smooth" id="slider-2">
+                            <!-- Foto 1 (Diupdate dengan link Google Drive) -->
+                            <img src="https://lh3.googleusercontent.com/d/1WhVw_ul8PTpFJpMRPUaIkwoTj2LLjiTt" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Tray Crystal 1">
+                            <!-- Foto 2 -->
+                            <img src="https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=400&auto=format&fit=crop" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Tray Crystal 2">
+                            <!-- Foto 3 -->
+                            <img src="https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=400&auto=format&fit=crop" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Tray Crystal 3">
+                        </div>
+                        <div class="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full pointer-events-none">Geser ></div>
+                    </div>
 
-            // HTML form pengaturan lokasi khusus untuk Manager & Supervisor
-            let locationSettingsHTML = '';
-            if (isManagerOrSpv) {
-                locationSettingsHTML = `
-                    <div class="mt-4 pt-4 border-t border-orange-200">
-                        <h5 class="font-semibold text-orange-800 mb-2 text-sm">Atur Lokasi & Jarak Absen (Manager/Supervisor)</h5>
-                        <form onsubmit="handleUpdateCompanyLocation(event)" class="flex flex-wrap gap-3 items-end">
-                            <div class="flex-1 min-w-[150px]">
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Latitude</label>
-                                <input id="compLat" type="number" step="any" value="${COMPANY_LOCATION.lat}" class="w-full p-2 border rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none" required />
-                            </div>
-                            <div class="flex-1 min-w-[150px]">
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Longitude</label>
-                                <input id="compLng" type="number" step="any" value="${COMPANY_LOCATION.lng}" class="w-full p-2 border rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none" required />
-                            </div>
-                            <div class="flex-1 min-w-[150px]">
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Radius Absen (meter)</label>
-                                <input id="compRad" type="number" value="${COMPANY_LOCATION.radius}" class="w-full p-2 border rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none" required />
-                            </div>
-                            <button type="submit" class="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 font-medium text-sm">
-                                Simpan Lokasi
-                            </button>
-                        </form>
+                    <div class="text-brand-yellow text-3xl font-bold mb-1">Rp 85.000<span class="text-sm text-gray-500 font-normal"> / box</span></div>
+                    <div class="text-gray-600 font-medium mb-4 pb-4 border-b border-yellow-100">Promo 5 Box: <span class="text-brand-yellow font-bold">Rp 400.000</span></div>
+                    <ul class="text-gray-600 space-y-3 mb-8 flex-grow">
+                        <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-brand-yellow text-sm"></i> Kotak full akrilik bening mewah</li>
+                        <li class="flex items-start gap-2"><i class="fas fa-star mt-1 text-brand-yellow text-sm"></i> <span class="font-bold text-gray-700">Termasuk Sewa Tempat Cincin & Uang ✨</span></li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-brand-yellow text-sm"></i> Rangkaian bunga premium & eksklusif</li>
+                        <li class="flex items-start gap-2"><i class="fas fa-tags mt-1 text-brand-yellow text-sm"></i> Sewa > 5 box harga mengikuti diskon paket</li>
+                    </ul>
+                    <a href="https://wa.me/6289669636206?text=Halo%20Adrisya%20Decoration,%20saya%20tertarik%20Pemesanan%20*Tray%20Crystal*." target="_blank" class="block w-full bg-brand-yellow text-brand-white hover:bg-brand-yellowhover text-center py-3 rounded-lg font-bold transition duration-300 shadow-[0_4px_15px_rgba(197,160,89,0.4)] mt-auto">
+                        <i class="fab fa-whatsapp mr-2"></i> Pesan Tray Crystal
+                    </a>
+                </div>
+
+                <!-- Paket 3: Tray Hidden Seserahan Kain -->
+                <div class="bg-brand-white border border-yellow-200 rounded-2xl p-8 hover:border-brand-yellow/50 transition duration-300 group shadow-sm hover:shadow-md flex flex-col overflow-hidden">
+                    <div class="w-14 h-14 bg-brand-card rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition duration-300">
+                        <i class="fas fa-gift text-2xl text-brand-yellow"></i>
+                    </div>
+                    <h3 class="text-2xl font-serif font-bold mb-2">Hidden Tray (Kain)</h3>
+                    
+                    <!-- Slider Foto Paket 3 -->
+                    <div class="relative w-full h-48 mb-4 rounded-xl overflow-hidden group/slider">
+                        <div class="flex overflow-x-auto hide-scrollbar snap-x snap-mandatory h-full scroll-smooth" id="slider-3">
+                            <!-- Foto 1 -->
+                            <img src="https://images.unsplash.com/photo-1544078754-58ea276c1171?q=80&w=400&auto=format&fit=crop" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Hidden Tray Kain 1">
+                            <!-- Foto 2 -->
+                            <img src="https://images.unsplash.com/photo-1606800052052-a08af7148866?q=80&w=400&auto=format&fit=crop" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Hidden Tray Kain 2">
+                            <!-- Foto 3 -->
+                            <img src="https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?q=80&w=400&auto=format&fit=crop" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Hidden Tray Kain 3">
+                        </div>
+                        <div class="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full pointer-events-none">Geser ></div>
+                    </div>
+
+                    <div class="text-brand-yellow text-3xl font-bold mb-1">Rp 75.000<span class="text-sm text-gray-500 font-normal"> / box</span></div>
+                    <div class="text-gray-600 font-medium mb-4 pb-4 border-b border-yellow-100">Promo 5 Box: <span class="text-brand-yellow font-bold">Rp 350.000</span></div>
+                    <ul class="text-gray-600 space-y-3 mb-8 flex-grow">
+                        <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-brand-yellow text-sm"></i> Desain tertutup berbalut kain privasi</li>
+                        <li class="flex items-start gap-2"><i class="fas fa-star mt-1 text-brand-yellow text-sm"></i> <span class="font-bold text-gray-700">Termasuk Sewa Tempat Cincin & Uang ✨</span></li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-brand-yellow text-sm"></i> Kesan elegan, klasik & sangat rapi</li>
+                        <li class="flex items-start gap-2"><i class="fas fa-tags mt-1 text-brand-yellow text-sm"></i> Sewa > 5 box harga mengikuti diskon paket</li>
+                    </ul>
+                    <a href="https://wa.me/6289669636206?text=Halo%20Adrisya%20Decoration,%20saya%20tertarik%20Pemesanan%20*Tray%20Hidden%20Kain*." target="_blank" class="block w-full bg-brand-white border border-brand-yellow text-brand-yellow hover:bg-brand-yellow hover:text-brand-white text-center py-3 rounded-lg font-bold transition duration-300 mt-auto">
+                        <i class="fab fa-whatsapp mr-2"></i> Pesan Hidden Kain
+                    </a>
+                </div>
+
+                <!-- Paket 4: Tray Hidden Paper Box Ukir -->
+                <div class="bg-brand-white border border-yellow-200 rounded-2xl p-8 hover:border-brand-yellow/50 transition duration-300 group shadow-sm hover:shadow-md flex flex-col overflow-hidden">
+                    <div class="w-14 h-14 bg-brand-card rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition duration-300">
+                        <i class="fas fa-scroll text-2xl text-brand-yellow"></i>
+                    </div>
+                    <h3 class="text-2xl font-serif font-bold mb-2">Hidden Box Ukir</h3>
+                    
+                    <!-- Slider Foto Paket 4 -->
+                    <div class="relative w-full h-48 mb-4 rounded-xl overflow-hidden group/slider">
+                        <div class="flex overflow-x-auto hide-scrollbar snap-x snap-mandatory h-full scroll-smooth" id="slider-4">
+                            <!-- Foto 1 -->
+                            <img src="https://images.unsplash.com/photo-1520854221256-17451cc331bf?q=80&w=400&auto=format&fit=crop" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Hidden Box Ukir 1">
+                            <!-- Foto 2 -->
+                            <img src="https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=400&auto=format&fit=crop" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Hidden Box Ukir 2">
+                            <!-- Foto 3 -->
+                            <img src="https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=400&auto=format&fit=crop" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Hidden Box Ukir 3">
+                        </div>
+                        <div class="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full pointer-events-none">Geser ></div>
+                    </div>
+
+                    <div class="text-brand-yellow text-3xl font-bold mb-1">Rp 80.000<span class="text-sm text-gray-500 font-normal"> / box</span></div>
+                    <div class="text-gray-600 font-medium mb-4 pb-4 border-b border-yellow-100">Promo 5 Box: <span class="text-brand-yellow font-bold">Rp 375.000</span></div>
+                    <ul class="text-gray-600 space-y-3 mb-8 flex-grow">
+                        <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-brand-yellow text-sm"></i> Paper box premium ukiran eksklusif</li>
+                        <li class="flex items-start gap-2"><i class="fas fa-star mt-1 text-brand-yellow text-sm"></i> <span class="font-bold text-gray-700">Termasuk Sewa Tempat Cincin & Uang ✨</span></li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-brand-yellow text-sm"></i> Melindungi hantaran dengan kemewahan</li>
+                        <li class="flex items-start gap-2"><i class="fas fa-tags mt-1 text-brand-yellow text-sm"></i> Sewa > 5 box harga mengikuti diskon paket</li>
+                    </ul>
+                    <a href="https://wa.me/6289669636206?text=Halo%20Adrisya%20Decoration,%20saya%20tertarik%20Pemesanan%20*Box%20Ukir*." target="_blank" class="block w-full bg-brand-white border border-brand-yellow text-brand-yellow hover:bg-brand-yellow hover:text-brand-white text-center py-3 rounded-lg font-bold transition duration-300 mt-auto">
+                        <i class="fab fa-whatsapp mr-2"></i> Pesan Box Ukir
+                    </a>
+                </div>
+
+                <!-- Paket 5: Custom Mahar -->
+                <div class="bg-brand-white border border-yellow-200 rounded-2xl p-8 hover:border-brand-yellow/50 transition duration-300 group shadow-sm hover:shadow-md flex flex-col overflow-hidden">
+                    <div class="w-14 h-14 bg-brand-card rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition duration-300">
+                        <i class="fas fa-ring text-2xl text-brand-yellow"></i>
+                    </div>
+                    <h3 class="text-2xl font-serif font-bold mb-2">Kreasi Mahar</h3>
+                    
+                    <!-- Slider Foto Paket 5 -->
+                    <div class="relative w-full h-48 mb-4 rounded-xl overflow-hidden group/slider">
+                        <div class="flex overflow-x-auto hide-scrollbar snap-x snap-mandatory h-full scroll-smooth" id="slider-5">
+                            <!-- Foto 1 -->
+                            <img src="https://images.unsplash.com/photo-1544078754-58ea276c1171?q=80&w=400&auto=format&fit=crop" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Kreasi Mahar 1">
+                            <!-- Foto 2 -->
+                            <img src="https://images.unsplash.com/photo-1606800052052-a08af7148866?q=80&w=400&auto=format&fit=crop" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Kreasi Mahar 2">
+                            <!-- Foto 3 -->
+                            <img src="https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?q=80&w=400&auto=format&fit=crop" class="w-full h-full object-cover flex-shrink-0 snap-center" alt="Kreasi Mahar 3">
+                        </div>
+                        <div class="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full pointer-events-none">Geser ></div>
+                    </div>
+
+                    <div class="text-brand-yellow text-3xl font-bold mb-1">Mulai <span class="text-2xl">Rp 250.000</span></div>
+                    <div class="text-gray-600 font-medium mb-4 pb-4 border-b border-yellow-100">Spesial Kustom <span class="text-brand-yellow">✨</span></div>
+                    <ul class="text-gray-600 space-y-3 mb-8 flex-grow">
+                        <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-brand-yellow text-sm"></i> Desain mahar kustom sesuai impian</li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-brand-yellow text-sm"></i> Pigura premium anti rayap</li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-brand-yellow text-sm"></i> Hiasan cutting nama & bunga detail</li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-brand-yellow text-sm"></i> Bebas request tema warna</li>
+                    </ul>
+                    <a href="https://wa.me/6289669636206?text=Halo%20Adrisya%20Decoration,%20saya%20ingin%20konsultasi%20*Mahar%20Kustom*." target="_blank" class="block w-full bg-brand-white border border-brand-yellow text-brand-yellow hover:bg-brand-yellow hover:text-brand-white text-center py-3 rounded-lg font-bold transition duration-300 mt-auto">
+                        <i class="fab fa-whatsapp mr-2"></i> Pesan Mahar
+                    </a>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- KATALOG SECTION -->
+    <section id="katalog" class="py-20 relative overflow-hidden bg-brand-white border-b border-yellow-50">
+        <div class="absolute top-0 left-0 w-64 h-64 bg-brand-yellow opacity-10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"></div>
+        <div class="absolute bottom-0 right-0 w-80 h-80 bg-brand-yellow opacity-10 rounded-full blur-3xl translate-x-1/3 translate-y-1/3"></div>
+
+        <div class="max-w-6xl mx-auto px-4 text-center relative z-10">
+            <h2 class="text-3xl md:text-4xl font-serif font-bold mb-6 text-brand-yellow">Jelajahi Karya Kami</h2>
+            <p class="text-gray-600 text-lg mb-12 max-w-2xl mx-auto">
+                Lihat berbagai macam portofolio, desain mahar eksklusif, dan referensi dekorasi seserahan dari klien-klien kami sebelumnya melalui katalog di bawah ini.
+            </p>
+            
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mb-16">
+                <!-- Foto Katalog (Sudah diisi dengan link Google Drive asli Anda sebelumnya) -->
+                <div class="aspect-square rounded-xl overflow-hidden relative group shadow-sm hover:shadow-xl transition duration-300">
+                    <img src="https://lh3.googleusercontent.com/d/1EtMLWcw5aUjH-DOGx7etIT1HETPyjkQ2" alt="Galeri Seserahan 1" class="w-full h-full object-cover transform group-hover:scale-110 transition duration-500">
+                    <div class="absolute inset-0 bg-black/0 group-hover:bg-brand-yellow/20 transition duration-300"></div>
+                </div>
+                <div class="aspect-square rounded-xl overflow-hidden relative group shadow-sm hover:shadow-xl transition duration-300">
+                    <img src="https://lh3.googleusercontent.com/d/1wd3CVxiXxXleDQOxi504qE5ZzvpDFhTO" alt="Galeri Seserahan 2" class="w-full h-full object-cover transform group-hover:scale-110 transition duration-500">
+                    <div class="absolute inset-0 bg-black/0 group-hover:bg-brand-yellow/20 transition duration-300"></div>
+                </div>
+                <div class="aspect-square rounded-xl overflow-hidden relative group shadow-sm hover:shadow-xl transition duration-300">
+                    <img src="https://lh3.googleusercontent.com/d/1EZerMb8Fo4vXBnBOkhxRN-14dQ-KLPZ-" alt="Galeri Seserahan 3" class="w-full h-full object-cover transform group-hover:scale-110 transition duration-500">
+                    <div class="absolute inset-0 bg-black/0 group-hover:bg-brand-yellow/20 transition duration-300"></div>
+                </div>
+                <div class="aspect-square rounded-xl overflow-hidden relative group shadow-sm hover:shadow-xl transition duration-300">
+                    <img src="https://lh3.googleusercontent.com/d/1jxJGOC6xcYgCFpVYho24m1o11mrX2uYe" alt="Galeri Seserahan 4" class="w-full h-full object-cover transform group-hover:scale-110 transition duration-500">
+                    <div class="absolute inset-0 bg-black/0 group-hover:bg-brand-yellow/20 transition duration-300"></div>
+                </div>
+                <div class="aspect-square rounded-xl overflow-hidden relative group shadow-sm hover:shadow-xl transition duration-300">
+                    <img src="https://lh3.googleusercontent.com/d/1X4_kY3l2X8O_mzBgG5JL4uuQzXhSzsgj" alt="Galeri Seserahan 5" class="w-full h-full object-cover transform group-hover:scale-110 transition duration-500">
+                    <div class="absolute inset-0 bg-black/0 group-hover:bg-brand-yellow/20 transition duration-300"></div>
+                </div>
+                <div class="aspect-square rounded-xl overflow-hidden relative group shadow-sm hover:shadow-xl transition duration-300">
+                    <img src="https://lh3.googleusercontent.com/d/1HCZrmIxtYnaN0dbZF7_5ZGLyHwrdsHG0" alt="Galeri Seserahan 6" class="w-full h-full object-cover transform group-hover:scale-110 transition duration-500">
+                    <div class="absolute inset-0 bg-black/0 group-hover:bg-brand-yellow/20 transition duration-300"></div>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row justify-center gap-6">
+                <a href="#" class="bg-brand-white border-2 border-brand-yellow text-brand-yellow px-8 py-4 rounded-full font-bold text-lg hover:bg-brand-card transition duration-300 shadow-[0_4px_15px_rgba(197,160,89,0.2)] flex items-center justify-center gap-3">
+                    <i class="fas fa-images text-xl"></i> Buka Full Katalog Online
+                </a>
+                <a href="https://www.instagram.com/adrisyadecoration?igsh=MTN3bjBpaW1iamUzag==" target="_blank" class="bg-gradient-to-r from-yellow-500 via-brand-yellow to-yellow-600 text-white px-8 py-4 rounded-full font-bold text-lg hover:opacity-90 transition duration-300 flex items-center justify-center gap-3 shadow-[0_4px_15px_rgba(197,160,89,0.4)]">
+                    <i class="fab fa-instagram text-xl"></i> Cek Instagram Kami
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- SYARAT DAN KETENTUAN SECTION -->
+    <section id="syarat" class="py-20 bg-brand-card">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl md:text-4xl font-serif font-bold mb-4 text-brand-yellow">Syarat dan Ketentuan Penyewaan</h2>
+                <div class="w-24 h-1 bg-brand-yellow mx-auto"></div>
+            </div>
+
+            <div class="space-y-12">
+                <!-- Pembayaran -->
+                <div>
+                    <h3 class="text-2xl font-serif font-bold mb-6 flex items-center gap-3">
+                        <i class="fas fa-wallet text-brand-yellow"></i> Pembayaran
+                    </h3>
+                    <div class="bg-white p-8 rounded-2xl border border-yellow-100 shadow-sm space-y-4 text-gray-700 leading-relaxed">
+                        <div class="flex gap-4">
+                            <span class="flex-shrink-0 w-6 h-6 bg-brand-yellow/10 text-brand-yellow rounded-full flex items-center justify-center font-bold text-sm">1</span>
+                            <p>Pembayaran uang muka (DP) minimal sebesar <span class="font-bold">Rp 50.000,-</span> wajib dilakukan pada saat melakukan pemesanan tanggal sewa. Tanpa pembayaran DP, tanggal sewa tidak dapat dikonfirmasi.</p>
+                        </div>
+                        <div class="flex gap-4">
+                            <span class="flex-shrink-0 w-6 h-6 bg-brand-yellow/10 text-brand-yellow rounded-full flex items-center justify-center font-bold text-sm">2</span>
+                            <p>Pelunasan pembayaran wajib dilakukan pada saat pengambilan box seserahan, yaitu maksimal <span class="font-bold">1 (satu) hari sebelum acara (H-1)</span>.</p>
+                        </div>
+                        <div class="flex gap-4">
+                            <span class="flex-shrink-0 w-6 h-6 bg-brand-yellow/10 text-brand-yellow rounded-full flex items-center justify-center font-bold text-sm">3</span>
+                            <p>DP yang telah dibayarkan <span class="font-bold">tidak dapat dikembalikan</span> dengan alasan apapun.</p>
+                        </div>
+                        <div class="flex gap-4">
+                            <span class="flex-shrink-0 w-6 h-6 bg-brand-yellow/10 text-brand-yellow rounded-full flex items-center justify-center font-bold text-sm">4</span>
+                            <p>Pengubahan tanggal sewa dapat dilakukan apabila slot tanggal yang dimaksud masih tersedia. Jika slot tersebut tidak tersedia, maka DP yang telah dibayarkan akan hangus.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Prosedur Penyewaan -->
+                <div>
+                    <h3 class="text-2xl font-serif font-bold mb-6 flex items-center gap-3">
+                        <i class="fas fa-clipboard-list text-brand-yellow"></i> Prosedur Penyewaan
+                    </h3>
+                    <div class="bg-white p-8 rounded-2xl border border-yellow-100 shadow-sm space-y-6 relative overflow-hidden">
+                        <div class="absolute left-[2.2rem] top-12 bottom-12 w-0.5 bg-yellow-50 hidden sm:block"></div>
                         
-                        <!-- PETA GOOGLE MAPS TAMBAHAN -->
-                        <div class="mt-4 w-full rounded-lg overflow-hidden border border-slate-300">
-                            <iframe 
-                                width="100%" 
-                                height="250" 
-                                frameborder="0" 
-                                scrolling="no" 
-                                marginheight="0" 
-                                marginwidth="0" 
-                                src="https://maps.google.com/maps?q=${COMPANY_LOCATION.lat},${COMPANY_LOCATION.lng}&hl=id&z=17&output=embed">
-                            </iframe>
+                        <div class="relative flex gap-6">
+                            <div class="flex-shrink-0 w-10 h-10 bg-brand-yellow text-white rounded-full flex items-center justify-center font-bold z-10 shadow-sm">1</div>
+                            <p class="pt-2 text-gray-700">Hubungi kami dan lengkapi form order yang telah disediakan melalui WhatsApp.</p>
                         </div>
-                        <p class="text-xs text-slate-500 mt-2">* Peta di atas menampilkan titik lokasi yang digunakan saat ini. Setiap perubahan pada form di atas akan mengubah titik pada peta ini.</p>
-                    </div>
-                `;
-            }
-
-            return `
-                <div class="space-y-6 max-w-4xl mx-auto">
-                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <h3 class="text-2xl font-bold text-slate-800">${getFormattedDate()}</h3>
-                        <p class="text-slate-500">Waktu saat ini: <span class="font-mono text-blue-600 font-bold">${getFormattedTime()}</span></p>
-                    </div>
-
-                    ${dashboardState.message ? `
-                        <div class="p-4 rounded-lg flex items-center gap-2 ${dashboardState.message.includes('Gagal') || dashboardState.message.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}">
-                            <i data-lucide="${dashboardState.message.includes('Gagal') ? 'alert-triangle' : 'check-circle'}" class="w-5 h-5"></i>
-                            ${dashboardState.message}
+                        <div class="relative flex gap-6">
+                            <div class="flex-shrink-0 w-10 h-10 bg-brand-yellow text-white rounded-full flex items-center justify-center font-bold z-10 shadow-sm">2</div>
+                            <p class="pt-2 text-gray-700">Pastikan tanggal sewa terjamin dengan membayar DP minimal <span class="font-bold">Rp 50.000,-</span>.</p>
                         </div>
-                    ` : ''}
-
-                    <div class="bg-orange-50 border border-orange-200 p-4 rounded-xl">
-                        <h4 class="font-semibold text-orange-800 flex items-center gap-2 mb-3">
-                            <i data-lucide="shield" class="w-5 h-5"></i> Pengaturan Mode Absensi
-                        </h4>
-                        <div class="flex flex-col sm:flex-row gap-4">
-                            <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                                <input type="checkbox" ${dashboardState.simulateInArea ? 'checked' : ''} onchange="toggleSimulateInArea(this.checked)" class="w-4 h-4 text-blue-600 rounded" />
-                                Simulasi Berada di Area Kantor (Geofencing Pass)
-                            </label>
-                            <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                                <input type="checkbox" ${dashboardState.isOutsideClient ? 'checked' : ''} onchange="toggleIsOutsideClient(this.checked)" class="w-4 h-4 text-blue-600 rounded" />
-                                Mode Tugas Luar / Bertemu Klien (Bypass Geofencing & Aktifkan Tracking)
-                            </label>
+                        <div class="relative flex gap-6">
+                            <div class="flex-shrink-0 w-10 h-10 bg-brand-yellow text-white rounded-full flex items-center justify-center font-bold z-10 shadow-sm">3</div>
+                            <p class="pt-2 text-gray-700">Pengantaran barang ke lokasi kami wajib dilakukan paling lambat 10 (sepuluh) hari sebelum acara, dan maksimal <span class="font-bold">2 (dua) hari sebelum acara (H-2)</span>.</p>
                         </div>
-                        ${locationSettingsHTML}
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <button onclick="handleDashboardAction('clock_in')" ${isClockInDisabled ? 'disabled' : ''}
-                            class="p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-all ${isClockInDisabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'}">
-                            <i data-lucide="play-circle" class="w-10 h-10"></i>
-                            <span class="font-bold">CLOCK IN</span>
-                        </button>
-                        <button onclick="handleDashboardAction('break_start')" ${isBreakStartDisabled ? 'disabled' : ''}
-                            class="p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-all ${isBreakStartDisabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-yellow-500 text-white hover:bg-yellow-600 shadow-md'}">
-                            <i data-lucide="pause-circle" class="w-10 h-10"></i>
-                            <span class="font-bold">MULAI ISTIRAHAT</span>
-                        </button>
-                        <button onclick="handleDashboardAction('break_end')" ${isBreakEndDisabled ? 'disabled' : ''}
-                            class="p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-all ${isBreakEndDisabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600 shadow-md'}">
-                            <i data-lucide="play-circle" class="w-10 h-10"></i>
-                            <span class="font-bold">SELESAI ISTIRAHAT</span>
-                        </button>
-                        <button onclick="handleDashboardAction('clock_out')" ${isClockOutDisabled ? 'disabled' : ''}
-                            class="p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-all ${isClockOutDisabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700 shadow-md'}">
-                            <i data-lucide="stop-circle" class="w-10 h-10"></i>
-                            <span class="font-bold">CLOCK OUT</span>
-                        </button>
-                    </div>
-
-                    ${(currentRecord && currentRecord.status === 'Tugas Luar' && currentRecord.clockOut === '-') ? `
-                        <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl flex justify-between items-center">
-                            <div>
-                                <h4 class="font-semibold text-indigo-800">Mode Tugas Luar Aktif</h4>
-                                <p class="text-sm text-indigo-600">Lokasi Anda sedang dipantau oleh atasan.</p>
-                            </div>
-                            <button onclick="handleUpdateLocation()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 text-sm flex items-center gap-2">
-                                <i data-lucide="navigation" class="w-4 h-4"></i> Update Lokasi Klien
-                            </button>
+                        <div class="relative flex gap-6">
+                            <div class="flex-shrink-0 w-10 h-10 bg-brand-yellow text-white rounded-full flex items-center justify-center font-bold z-10 shadow-sm">4</div>
+                            <p class="pt-2 text-gray-700">Proses pengerjaan seserahan akan dimulai setelah barang yang dikirimkan diterima. Jika barang yang diantar melebihi kapasitas box yang disewa, konfirmasi akan dilakukan terlebih dahulu.</p>
                         </div>
-                    ` : ''}
-
-                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mt-8">
-                        <h3 class="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Status Hari Ini</h3>
-                        ${currentRecord ? `
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                                <div class="p-3 bg-slate-50 rounded-lg">
-                                    <p class="text-xs text-slate-500">Clock In</p>
-                                    <p class="font-bold text-slate-800 text-lg">${currentRecord.clockIn}</p>
-                                </div>
-                                <div class="p-3 bg-slate-50 rounded-lg">
-                                    <p class="text-xs text-slate-500">Mulai Break</p>
-                                    <p class="font-bold text-slate-800 text-lg">${currentRecord.breakStart}</p>
-                                </div>
-                                <div class="p-3 bg-slate-50 rounded-lg">
-                                    <p class="text-xs text-slate-500">Selesai Break</p>
-                                    <p class="font-bold text-slate-800 text-lg">${currentRecord.breakEnd}</p>
-                                </div>
-                                <div class="p-3 bg-slate-50 rounded-lg">
-                                    <p class="text-xs text-slate-500">Clock Out</p>
-                                    <p class="font-bold text-slate-800 text-lg">${currentRecord.clockOut}</p>
-                                </div>
-                            </div>
-                        ` : `
-                            <p class="text-slate-500 text-center py-4">Belum ada data absensi untuk hari ini.</p>
-                        `}
-                    </div>
-                </div>
-            `;
-        };
-
-        const renderReports = () => {
-            let tableRows = attendanceRecords.length === 0 
-                ? `<tr><td colspan="7" class="p-6 text-center text-slate-500">Data laporan masih kosong.</td></tr>`
-                : attendanceRecords.map(record => `
-                    <tr class="border-b last:border-0 hover:bg-slate-50">
-                        <td class="p-4 font-medium text-slate-800">${record.userName}</td>
-                        <td class="p-4 text-slate-600">${record.date}</td>
-                        <td class="p-4">
-                            <span class="text-xs px-2 py-1 rounded-full ${record.status === 'Hadir' ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700'}">
-                                ${record.status}
-                            </span>
-                        </td>
-                        <td class="p-4 text-slate-600">${record.clockIn}</td>
-                        <td class="p-4 text-slate-600">${record.breakStart}</td>
-                        <td class="p-4 text-slate-600">${record.breakEnd}</td>
-                        <td class="p-4 text-slate-600">${record.clockOut}</td>
-                    </tr>
-                `).join('');
-
-            return `
-                <div class="space-y-6">
-                    <div class="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <div>
-                            <h2 class="text-2xl font-bold text-slate-800">Laporan Absensi</h2>
-                            <p class="text-slate-500">Rekapitulasi kehadiran seluruh staf.</p>
+                        <div class="relative flex gap-6">
+                            <div class="flex-shrink-0 w-10 h-10 bg-brand-yellow text-white rounded-full flex items-center justify-center font-bold z-10 shadow-sm">5</div>
+                            <p class="pt-2 text-gray-700">Pengambilan box seserahan yang telah dihias wajib dilakukan maksimal <span class="font-bold">H-1 sebelum acara</span>, bersamaan dengan pelunasan pembayaran.</p>
                         </div>
-                        <button onclick="exportToCSV()" class="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors shadow-sm">
-                            <i data-lucide="download" class="w-5 h-5"></i> Export Excel/CSV
-                        </button>
-                    </div>
-
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse">
-                                <thead>
-                                    <tr class="bg-slate-100 text-slate-600 text-sm border-b">
-                                        <th class="p-4 font-semibold">Nama Staf</th>
-                                        <th class="p-4 font-semibold">Tanggal</th>
-                                        <th class="p-4 font-semibold">Status</th>
-                                        <th class="p-4 font-semibold">Clock In</th>
-                                        <th class="p-4 font-semibold">Mulai Break</th>
-                                        <th class="p-4 font-semibold">Selesai Break</th>
-                                        <th class="p-4 font-semibold">Clock Out</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${tableRows}
-                                </tbody>
-                            </table>
+                        <div class="relative flex gap-6">
+                            <div class="flex-shrink-0 w-10 h-10 bg-brand-yellow text-white rounded-full flex items-center justify-center font-bold z-10 shadow-sm">6</div>
+                            <p class="pt-2 text-gray-700">Pengembalian box seserahan beserta seluruh aksesoris harus dilakukan paling lambat <span class="font-bold">H+2 setelah acara</span>. Keterlambatan dalam pengembalian akan dikenakan denda sebesar <span class="font-bold text-red-500">Rp 100.000,- per hari</span>.</p>
                         </div>
                     </div>
                 </div>
-            `;
-        };
+            </div>
+        </div>
+    </section>
 
-        const renderSchedule = () => {
-            const staffUsers = userList.filter(u => u.role === 'staff' || u.role === 'supervisor' || u.role === 'trainee' || u.role === 'casual');
-            const userOptions = staffUsers.map(u => `<option value="${u.id}">${u.name} (@${u.nickname})</option>`).join('');
-
-            const tableRows = schedules.map(sched => {
-                const u = userList.find(x => x.id === sched.userId);
-                return `
-                    <tr class="border-b last:border-0 hover:bg-slate-50">
-                        <td class="p-4 font-medium text-slate-800">${u ? u.name : 'Unknown'}</td>
-                        <td class="p-4 text-slate-600">${sched.date}</td>
-                        <td class="p-4 text-slate-600">${sched.shift}</td>
-                    </tr>
-                `;
-            }).join('');
-
-            return `
-                <div class="space-y-6">
-                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <h2 class="text-2xl font-bold text-slate-800 mb-2">Manajemen Jadwal</h2>
-                        <p class="text-slate-500 mb-6">Atur jadwal kerja atau shift karyawan.</p>
-
-                        <form onsubmit="handleAddSchedule(event)" class="flex flex-wrap gap-4 items-end bg-slate-50 p-4 rounded-lg border border-slate-100">
-                            <div class="flex-1 min-w-[200px]">
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Karyawan</label>
-                                <select id="schedUserId" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                                    <option value="">-- Pilih Karyawan --</option>
-                                    ${userOptions}
-                                </select>
-                            </div>
-                            <div class="flex-1 min-w-[200px]">
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Tanggal</label>
-                                <input id="schedDate" type="date" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                            </div>
-                            <div class="flex-1 min-w-[200px]">
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Jam Shift</label>
-                                <input id="schedShift" type="text" placeholder="Contoh: 08:00 - 17:00" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                            </div>
-                            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium h-[42px]">
-                                Tambah Jadwal
-                            </button>
-                        </form>
-                    </div>
-
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-100 text-slate-600 text-sm border-b">
-                                    <th class="p-4 font-semibold">Nama Karyawan</th>
-                                    <th class="p-4 font-semibold">Tanggal</th>
-                                    <th class="p-4 font-semibold">Jam Shift</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${tableRows}
-                            </tbody>
-                        </table>
-                    </div>
+    <!-- FOOTER -->
+    <footer class="bg-brand-card border-t border-yellow-200 pt-16 pb-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+                <div class="flex items-center gap-3">
+                    <img src="https://lh3.googleusercontent.com/d/1UCgEa8Zs3IfwbUfk911JYhhJqSuqH5ZD" alt="Logo Adrisya" class="h-10 w-10 object-contain rounded-full border border-brand-yellow/50" onerror="this.src='https://placehold.co/100x100/ffffff/c5a059?text=AD'">
+                    <span class="font-serif font-bold text-xl text-brand-yellow">Adrisya Decoration</span>
                 </div>
-            `;
-        };
-
-        const renderTracking = () => {
-            const trackingCards = trackingData.length === 0 
-                ? `
-                <div class="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300 col-span-1 md:col-span-2">
-                    <i data-lucide="map-pin" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
-                    <p class="text-slate-500">Saat ini tidak ada staf yang sedang bertugas di luar (Tracking kosong).</p>
-                </div>`
-                // PERBAIKAN: Menambahkan peta interaktif untuk setiap staf yang dilacak agar atasan bisa mengontrol letak pastinya
-                : trackingData.map(data => `
-                <div class="flex flex-col gap-4 p-4 border border-indigo-100 bg-indigo-50/50 rounded-xl">
-                    <div class="flex items-start gap-4">
-                        <div class="bg-indigo-100 p-3 rounded-full text-indigo-600 mt-1">
-                            <i data-lucide="map-pin" class="w-6 h-6"></i>
-                        </div>
-                        <div class="flex-1">
-                            <h4 class="font-bold text-slate-800 text-lg">${data.userName}</h4>
-                            <p class="text-sm text-slate-600 mb-2">Pembaruan terakhir: <span class="font-semibold">${data.timestamp}</span></p>
-                            <div class="bg-white p-3 rounded-lg border border-indigo-100 shadow-sm text-sm font-mono text-slate-700">
-                                <div>Lat: ${data.lat.toFixed(6)}</div>
-                                <div>Lng: ${data.lng.toFixed(6)}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- PETA GOOGLE MAPS UNTUK MEMANTAU TITIK TRACKING -->
-                    <div class="w-full rounded-lg overflow-hidden border border-slate-300 shadow-inner">
-                        <iframe 
-                            width="100%" 
-                            height="200" 
-                            frameborder="0" 
-                            scrolling="no" 
-                            marginheight="0" 
-                            marginwidth="0" 
-                            src="https://maps.google.com/maps?q=${data.lat},${data.lng}&hl=id&z=17&output=embed">
-                        </iframe>
-                    </div>
-                </div>`).join('');
-
-            return `
-                <div class="space-y-6">
-                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <h2 class="text-2xl font-bold text-slate-800 mb-2">Tracking Staf (Tugas Luar)</h2>
-                        <p class="text-slate-500 mb-6">Pantau lokasi karyawan yang sedang melakukan pertemuan dengan klien di luar kantor.</p>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            ${trackingCards}
-                        </div>
-                    </div>
+                
+                <div class="flex gap-6">
+                    <a href="https://www.instagram.com/adrisyadecoration?igsh=MTN3bjBpaW1iamUzag==" target="_blank" class="text-gray-400 hover:text-brand-yellow transition text-2xl"><i class="fab fa-instagram"></i></a>
+                    <a href="#" class="text-gray-400 hover:text-brand-yellow transition text-2xl"><i class="fab fa-tiktok"></i></a>
+                    <a href="https://wa.me/6289669636206" target="_blank" class="text-gray-400 hover:text-brand-yellow transition text-2xl"><i class="fab fa-whatsapp"></i></a>
                 </div>
-            `;
-        };
+            </div>
+            <div class="border-t border-yellow-200 mt-8 pt-8 text-center text-gray-600 text-sm">
+                © 2024 Adrisya Decoration. All rights reserved.
+            </div>
+        </div>
+    </footer>
 
-        const renderManageStaff = () => {
-            // Cek apakah ada user yang sedang diedit berdasarkan editingUserId
-            const editingUser = editingUserId ? userList.find(u => u.id === editingUserId) : null;
-
-            const tableRows = userList.map(u => `
-                <tr class="border-b last:border-0 hover:bg-slate-50">
-                    <td class="p-4 font-medium text-slate-800">${u.name}</td>
-                    <td class="p-4 text-slate-600 font-medium">@${u.nickname}</td>
-                    <td class="p-4 text-slate-600">${u.phone}</td>
-                    <td class="p-4 text-slate-600 font-mono tracking-widest">${u.pin}</td>
-                    <td class="p-4">${renderRoleBadge(u.role)}</td>
-                    <td class="p-4">
-                        <button onclick="handleEditStaff(${u.id})" class="text-blue-600 hover:text-blue-800 text-sm font-medium underline">
-                            Edit
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
-
-            // Menyesuaikan teks judul & tombol berdasarkan apakah sedang edit atau tambah baru
-            const formTitle = editingUser ? "Edit Data Staf" : "Kelola Staf Baru";
-            const formDesc = editingUser ? "Ubah informasi akun untuk staf yang dipilih." : "Daftarkan akun untuk anggota tim baru. Mereka akan login menggunakan Nama Panggilan dan PIN yang Anda buatkan.";
-            const btnSubmitText = editingUser ? "Simpan Perubahan" : "Daftarkan Akun";
-
-            return `
-                <div class="space-y-6">
-                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <h2 class="text-2xl font-bold text-slate-800 mb-2">${formTitle}</h2>
-                        <p class="text-slate-500 mb-6">${formDesc}</p>
-
-                        ${manageStaffError ? `
-                            <div class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm border border-red-200">
-                                ${manageStaffError}
-                            </div>
-                        ` : ''}
-
-                        <form onsubmit="handleAddStaff(event)" class="flex flex-col gap-4 bg-slate-50 p-6 rounded-lg border border-slate-100">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
-                                    <input id="staffName" type="text" value="${editingUser ? editingUser.name : ''}" placeholder="Contoh: Reza Rahardian" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Nama Panggilan (Digunakan untuk Login)</label>
-                                    <input id="staffNickname" type="text" value="${editingUser ? editingUser.nickname : ''}" placeholder="Contoh: reza" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Nomor Telepon</label>
-                                    <input id="staffPhone" type="text" value="${editingUser ? editingUser.phone : ''}" placeholder="Contoh: 08123456789" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Buat PIN (4 Digit Angka)</label>
-                                    <input id="staffPin" type="text" value="${editingUser ? editingUser.pin : ''}" maxlength="4" pattern="\\d{4}" placeholder="Contoh: 1234" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" oninput="this.value = this.value.replace(/\\D/g, '')" />
-                                </div>
-                                <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Role / Peran</label>
-                                    <select id="staffRole" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                                        <option value="staff" ${editingUser && editingUser.role === 'staff' ? 'selected' : ''}>Staff</option>
-                                        <option value="casual" ${editingUser && editingUser.role === 'casual' ? 'selected' : ''}>Casual</option>
-                                        <option value="trainee" ${editingUser && editingUser.role === 'trainee' ? 'selected' : ''}>Trainee</option>
-                                        <option value="supervisor" ${editingUser && editingUser.role === 'supervisor' ? 'selected' : ''}>Supervisor</option>
-                                        <option value="manager" ${editingUser && editingUser.role === 'manager' ? 'selected' : ''}>Manager</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="flex gap-3 mt-2">
-                                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium">
-                                    ${btnSubmitText}
-                                </button>
-                                ${editingUser ? `
-                                    <button type="button" onclick="handleCancelEditStaff()" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg hover:bg-slate-400 font-medium">
-                                        Batal Edit
-                                    </button>
-                                ` : ''}
-                            </div>
-                        </form>
-                    </div>
-
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse min-w-[800px]">
-                                <thead>
-                                    <tr class="bg-slate-100 text-slate-600 text-sm border-b">
-                                        <th class="p-4 font-semibold">Nama Lengkap</th>
-                                        <th class="p-4 font-semibold">Nama Panggilan</th>
-                                        <th class="p-4 font-semibold">No. Telepon</th>
-                                        <th class="p-4 font-semibold">PIN</th>
-                                        <th class="p-4 font-semibold">Role</th>
-                                        <th class="p-4 font-semibold">Aksi</th> <!-- Kolom Aksi Baru -->
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${tableRows}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            `;
-        };
-
-        const renderMainApp = () => {
-            let activeContentHTML = '';
-            if (activeTab === 'dashboard') activeContentHTML = renderDashboard();
-            if (activeTab === 'reports') activeContentHTML = renderReports();
-            if (activeTab === 'schedule') activeContentHTML = renderSchedule();
-            if (activeTab === 'tracking') activeContentHTML = renderTracking();
-            if (activeTab === 'manage_staff') activeContentHTML = renderManageStaff();
-
-            const isManagerOrSpv = currentUser.role === 'manager' || currentUser.role === 'supervisor';
-
-            return `
-                <div class="min-h-screen bg-slate-50 flex flex-col md:flex-row">
-                    <!-- Sidebar Navigasi -->
-                    <div class="w-full md:w-64 bg-slate-900 text-white flex flex-col">
-                        <div class="p-6 text-center border-b border-slate-800">
-                            <h2 class="text-xl font-bold flex items-center justify-center gap-2">
-                                <i data-lucide="clock" class="w-6 h-6 text-blue-400"></i>
-                                Absensi FBS - Luminor Hotel Banyuwangi
-                            </h2>
-                            <p class="text-xs text-slate-400 mt-2">Login sebagai: ${currentUser.name}</p>
-                        </div>
-                        <nav class="flex-1 p-4 space-y-2">
-                            ${renderNavButton('clock', 'Dashboard / Absen', 'dashboard')}
-                            ${isManagerOrSpv ? `
-                                ${renderNavButton('file-text', 'Laporan', 'reports')}
-                                ${renderNavButton('calendar', 'Jadwal', 'schedule')}
-                                ${renderNavButton('navigation', 'Tracking Staf', 'tracking')}
-                                ${renderNavButton('users', 'Kelola Staf', 'manage_staff')}
-                            ` : ''}
-                        </nav>
-                        <div class="p-4 border-t border-slate-800">
-                            <button onclick="handleLogout()" class="w-full flex items-center gap-3 text-slate-300 hover:text-white hover:bg-slate-800 p-3 rounded-lg transition-colors">
-                                <i data-lucide="log-out" class="w-5 h-5"></i> Keluar
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Konten Utama -->
-                    <div class="flex-1 overflow-auto p-4 md:p-8">
-                        ${activeContentHTML}
-                    </div>
-                </div>
-            `;
-        };
-
-        // --- FUNGSI RENDER UTAMA ---
-        const renderApp = () => {
-            const appRoot = document.getElementById('app-root');
-            if (!currentUser) {
-                appRoot.innerHTML = renderLogin();
-            } else {
-                appRoot.innerHTML = renderMainApp();
-            }
-            // Inisialisasi ulang Lucide icon setelah render DOM baru
-            lucide.createIcons();
-        };
-
-        // Init App pertama kali
-        renderApp();
-    </script>
 </body>
 </html>
